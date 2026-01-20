@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Bridge Clearance</title>
+    <title>OBC Bridge Clearance Calculator</title>
     <style>
         * {
             margin: 0;
@@ -61,11 +61,13 @@
             margin: 0 auto;
             min-height: 100vh;
             position: relative;
-            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            padding: 0 16px;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         .hero-header {
-            padding: 40px 24px 32px;
+            padding: 40px 0 20px;
             text-align: center;
             position: relative;
         }
@@ -84,14 +86,16 @@
         }
 
         .hero-title {
-            font-size: 42px;
+            font-size: 32px;
             font-weight: 800;
-            letter-spacing: -1px;
+            letter-spacing: -0.5px;
             margin-bottom: 8px;
             background: linear-gradient(135deg, #FFFFFF 0%, var(--foam) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            line-height: 1.2;
+            padding: 0 8px;
         }
 
         .hero-subtitle {
@@ -99,6 +103,23 @@
             opacity: 0.85;
             font-weight: 500;
             letter-spacing: 0.3px;
+            margin-bottom: 12px;
+        }
+
+        .beta-notice {
+            background: rgba(255, 217, 61, 0.15);
+            border: 1px solid rgba(255, 217, 61, 0.3);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin: 16px 0 0 0;
+            font-size: 13px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .beta-notice strong {
+            color: var(--sunrise);
+            font-weight: 700;
         }
 
         .glass-card {
@@ -107,7 +128,7 @@
             -webkit-backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 24px;
-            margin: 0 16px 20px;
+            margin: 20px 0;
             padding: 24px;
             box-shadow: 
                 0 8px 32px rgba(0, 0, 0, 0.2),
@@ -141,6 +162,7 @@
             justify-content: center;
             font-size: 24px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            flex-shrink: 0;
         }
 
         .card-title {
@@ -263,43 +285,39 @@
             font-weight: 500;
             font-family: inherit;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-sizing: border-box;
         }
 
-        /* FIXED: Better time input support for Safari */
+        /* FIXED: Force 24-hour time input */
         input[type="time"] {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            min-height: 52px;
+            -webkit-appearance: textfield;
+            -moz-appearance: textfield;
         }
 
-        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="time"]::-webkit-datetime-edit-ampm-field {
+            display: none;
+        }
+
         input[type="time"]::-webkit-calendar-picker-indicator {
-            filter: invert(1) brightness(1.5);
+            filter: invert(1) brightness(1.2);
             cursor: pointer;
-            opacity: 1;
-            font-size: 24px;
-            padding: 8px;
-            margin-left: 8px;
+            font-size: 20px;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.2);
+            cursor: pointer;
+            font-size: 20px;
         }
 
         input[type="date"]::-webkit-datetime-edit,
         input[type="time"]::-webkit-datetime-edit {
             color: white;
-            padding: 0;
         }
 
         input[type="date"]::-webkit-datetime-edit-fields-wrapper,
         input[type="time"]::-webkit-datetime-edit-fields-wrapper {
             color: white;
-            padding: 0;
-        }
-
-        input[type="time"]::-webkit-datetime-edit-hour-field,
-        input[type="time"]::-webkit-datetime-edit-minute-field,
-        input[type="time"]::-webkit-datetime-edit-ampm-field {
-            color: white;
-            padding: 2px 4px;
         }
 
         input::placeholder {
@@ -355,7 +373,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
-            padding: 0 16px 24px;
+            padding: 0 0 24px 0;
         }
 
         .btn {
@@ -487,7 +505,7 @@
         }
 
         .result-card {
-            margin: 0 16px 20px;
+            margin: 0 0 20px 0;
             border-radius: 28px;
             overflow: hidden;
             animation: scaleIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -683,7 +701,7 @@
         }
 
         .windows-container {
-            padding: 0 16px 24px;
+            padding: 0 0 24px 0;
         }
 
         .windows-header {
@@ -796,7 +814,7 @@
             border: 1px solid rgba(255, 107, 107, 0.3);
             border-radius: 24px;
             padding: 40px 28px;
-            margin: 0 16px 20px;
+            margin: 0 0 20px 0;
             text-align: center;
             box-shadow: 0 8px 32px rgba(255, 107, 107, 0.2);
         }
@@ -852,6 +870,23 @@
             color: var(--foam);
         }
 
+        .footer-links {
+            text-align: center;
+            padding: 24px 0 40px;
+            opacity: 0.7;
+            font-size: 14px;
+        }
+
+        .footer-links a {
+            color: var(--foam);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+
         .validation-badge {
             position: fixed;
             bottom: 20px;
@@ -866,19 +901,18 @@
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
 
-        .debug-info {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            padding: 12px;
-            margin-top: 16px;
-            font-size: 11px;
-            font-family: monospace;
-            color: rgba(255, 255, 255, 0.7);
-        }
-
         .hidden {
             display: none !important;
+        }
+
+        @media (max-width: 480px) {
+            .hero-title {
+                font-size: 28px;
+            }
+            
+            .card-title {
+                font-size: 18px;
+            }
         }
     </style>
 </head>
@@ -886,8 +920,11 @@
     <div class="app-container">
         <div class="hero-header">
             <div class="hero-icon">⛵</div>
-            <h1 class="hero-title">Bridge Clearance</h1>
+            <h1 class="hero-title">Outboard Boating Club<br>Bridge Clearance</h1>
             <p class="hero-subtitle">Tamaki Drive · Auckland</p>
+            <div class="beta-notice">
+                <strong>⚠️ BETA:</strong> This tool is in testing. Always double-check results against <a href="https://www.obc.org.nz/wp-content/uploads/2024/12/OBC-TRB-Clearances-2024-04.pdf" target="_blank" style="color: var(--foam); text-decoration: underline;">OBC bridge clearance tables</a> before passage.
+            </div>
         </div>
 
         <div class="glass-card">
@@ -920,9 +957,9 @@
                 <input type="date" id="tideDate">
             </div>
             <div class="form-group">
-                <label class="form-label">Time (Optional)</label>
-                <input type="time" id="preferredTime" step="900">
-                <p class="input-hint">Leave blank to see all safe passage windows</p>
+                <label class="form-label">Time (24-hour format)</label>
+                <input type="time" id="preferredTime">
+                <p class="input-hint">Use 24-hour format (e.g., 14:30 for 2:30 PM). Leave blank to see all safe windows.</p>
             </div>
         </div>
 
@@ -963,9 +1000,13 @@
             <button class="btn btn-secondary" onclick="checkClearance()">Check Now</button>
             <button class="btn btn-primary" onclick="findBestTimes()">Find Times</button>
         </div>
+
+        <div class="footer-links">
+            Reference: <a href="https://www.obc.org.nz/wp-content/uploads/2024/12/OBC-TRB-Clearances-2024-04.pdf" target="_blank">OBC Bridge Clearance Tables (PDF)</a>
+        </div>
     </div>
 
-    <div class="validation-badge">✓ Fixed v2.0</div>
+    <div class="validation-badge">✓ v3.2</div>
 
     <script>
         let selectedSpanClearance = 6.2;
@@ -1035,8 +1076,8 @@
                     throw new Error('No tide data found for selected date');
                 }
                 
-                console.log('Tide data loaded:', tideData.length, 'points');
-                console.log('Hourly data:', fullDayTideData.length, 'points');
+                console.log('Tide data loaded:', tideData.length, 'actual points');
+                console.log('Hourly interpolated:', fullDayTideData.length, 'points');
                 
                 showToast('Tide data loaded successfully', 'success');
                 return true;
@@ -1053,8 +1094,6 @@
         function parseLinzCsv(csvText, targetDate) {
             const lines = csvText.trim().split('\n');
             const data = [];
-            
-            // Normalize target date to just the date part for comparison
             const targetDateStr = targetDate.toISOString().split('T')[0];
             
             for (let i = 2; i < lines.length; i++) {
@@ -1131,6 +1170,50 @@
             return hourlyData;
         }
 
+        function interpolateTideHeight(tidePoints, targetTime) {
+            if (tidePoints.length === 0) return null;
+            
+            let before = null, after = null;
+            
+            for (let i = 0; i < tidePoints.length - 1; i++) {
+                if (tidePoints[i].time <= targetTime && tidePoints[i + 1].time >= targetTime) {
+                    before = tidePoints[i];
+                    after = tidePoints[i + 1];
+                    break;
+                }
+            }
+            
+            if (!before || !after) {
+                const nearest = tidePoints.reduce((prev, curr) => 
+                    Math.abs(curr.time - targetTime) < Math.abs(prev.time - targetTime) ? curr : prev
+                );
+                return {
+                    time: targetTime,
+                    height: nearest.height,
+                    interpolated: false,
+                    sourceTime: nearest.time
+                };
+            }
+            
+            const timeDiff = after.time - before.time;
+            const timeFromBefore = targetTime - before.time;
+            const ratio = timeFromBefore / timeDiff;
+            const interpolatedHeight = before.height + (after.height - before.height) * ratio;
+            
+            console.log(`Interpolating: ${before.time.toLocaleTimeString()} (${before.height}m) -> ${after.time.toLocaleTimeString()} (${after.height}m)`);
+            console.log(`Target: ${targetTime.toLocaleTimeString()}, Ratio: ${(ratio * 100).toFixed(1)}%, Result: ${interpolatedHeight.toFixed(2)}m`);
+            
+            return {
+                time: targetTime,
+                height: interpolatedHeight,
+                interpolated: true,
+                beforeTime: before.time,
+                afterTime: after.time,
+                beforeHeight: before.height,
+                afterHeight: after.height
+            };
+        }
+
         async function checkClearance() {
             const boatHeight = parseFloat(document.getElementById('boatHeight').value);
             const safetyMargin = parseFloat(document.getElementById('safetyMargin').value);
@@ -1151,26 +1234,25 @@
                 return;
             }
 
-            // CRITICAL FIX: Properly parse the time input every time
             const dateInput = document.getElementById('tideDate').value;
             const selectedDate = new Date(dateInput + 'T00:00:00');
             const [hours, minutes] = preferredTime.split(':').map(Number);
             const targetTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hours, minutes, 0);
 
-            console.log('Check clearance for:', targetTime.toISOString());
+            console.log('Requested time:', targetTime.toISOString());
 
-            // CRITICAL FIX: Use the CURRENT targetTime, not a cached one
-            const closestTide = fullDayTideData.reduce((prev, curr) => 
-                Math.abs(curr.time.getTime() - targetTime.getTime()) < Math.abs(prev.time.getTime() - targetTime.getTime()) ? curr : prev
-            );
+            const tideResult = interpolateTideHeight(tideData, targetTime);
+            
+            if (!tideResult) {
+                showToast('Unable to calculate tide for selected time', 'error');
+                return;
+            }
 
-            console.log('Closest tide:', closestTide.time.toISOString(), closestTide.height);
-
-            displayResult(boatHeight, safetyMargin, closestTide, targetTime);
+            displayResult(boatHeight, safetyMargin, tideResult, targetTime);
         }
 
-        function displayResult(boatHeight, safetyMargin, tide, requestedTime) {
-            const actualClearance = selectedSpanClearance - tide.height;
+        function displayResult(boatHeight, safetyMargin, tideResult, requestedTime) {
+            const actualClearance = selectedSpanClearance - tideResult.height;
             const clearanceNeeded = boatHeight + safetyMargin;
             const spareClearance = actualClearance - clearanceNeeded;
 
@@ -1194,8 +1276,17 @@
             }
 
             const percentage = Math.min(100, Math.max(0, (clearanceNeeded / actualClearance) * 100));
-            const requestedTimeStr = requestedTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
-            const tideTimeStr = tide.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
+            const requestedTimeStr = requestedTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+            
+            const tideHeightDisplay = tideResult.interpolated ? `${tideResult.height.toFixed(2)}m*` : `${tideResult.height.toFixed(2)}m`;
+            const actualClearanceDisplay = tideResult.interpolated ? `${actualClearance.toFixed(2)}m*` : `${actualClearance.toFixed(2)}m`;
+            
+            let accuracyNote = '';
+            if (tideResult.interpolated) {
+                accuracyNote = `<div class="info-panel" style="margin-top: 16px; background: rgba(91, 163, 208, 0.15); border-color: rgba(91, 163, 208, 0.3);">
+                    <p class="info-text"><strong>* Interpolated Value:</strong> Tide height calculated between ${tideResult.beforeTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false })} (${tideResult.beforeHeight.toFixed(2)}m) and ${tideResult.afterTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false })} (${tideResult.afterHeight.toFixed(2)}m) for maximum accuracy.</p>
+                </div>`;
+            }
 
             document.getElementById('resultContainer').innerHTML = `
                 <div class="result-card">
@@ -1214,16 +1305,12 @@
                             <span class="result-value">${requestedTimeStr}</span>
                         </div>
                         <div class="result-row">
-                            <span class="result-label">Tide Data Time</span>
-                            <span class="result-value">${tideTimeStr}</span>
-                        </div>
-                        <div class="result-row">
                             <span class="result-label">Tide Height</span>
-                            <span class="result-value">${tide.height.toFixed(2)}m</span>
+                            <span class="result-value">${tideHeightDisplay}</span>
                         </div>
                         <div class="result-row">
                             <span class="result-label">Actual Clearance</span>
-                            <span class="result-value">${actualClearance.toFixed(2)}m</span>
+                            <span class="result-value">${actualClearanceDisplay}</span>
                         </div>
                         <div class="result-row">
                             <span class="result-label">Required</span>
@@ -1247,14 +1334,10 @@
                             </div>
                         </div>
 
-                        <div class="info-panel" style="margin-top: 24px;">
-                            <p class="info-text"><strong>Weather Impact:</strong> Barometric pressure and wind can affect tide height. Add extra margin in adverse conditions.</p>
-                        </div>
+                        ${accuracyNote}
 
-                        <div class="debug-info">
-                            Debug: Date=${tide.time.toISOString().split('T')[0]} | 
-                            Requested=${requestedTime.toISOString()} | 
-                            Matched=${tide.time.toISOString()}
+                        <div class="info-panel" style="margin-top: ${accuracyNote ? '8px' : '24px'};">
+                            <p class="info-text"><strong>Weather Impact:</strong> Barometric pressure and wind can affect tide height. Add extra margin in adverse conditions.</p>
                         </div>
                     </div>
                 </div>
@@ -1354,8 +1437,8 @@
 
             const windowsHTML = windows.map((window, idx) => {
                 const duration = (window.end.time - window.start.time) / (1000 * 60 * 60);
-                const startStr = window.start.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
-                const endStr = window.end.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit' });
+                const startStr = window.start.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const endStr = window.end.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
                 const tideDirection = window.end.tideHeight > window.start.tideHeight ? '↗ Rising' : '↘ Falling';
                 
                 return `
