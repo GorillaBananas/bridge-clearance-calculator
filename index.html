@@ -30,10 +30,11 @@
     <meta property="twitter:image" content="https://gorillabananas.github.io/icon-512.png">
     
     <!-- Apple Touch Icons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Ctext x='90' y='120' font-size='120' text-anchor='middle'%3E⛵%3C/text%3E%3C/svg%3E">
-    
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%230A1628'/%3E%3Cpath d='M90 40 L140 140 L90 120 L40 140 Z' fill='%23ffffff' stroke='%235BA3D0' stroke-width='3'/%3E%3Cpath d='M90 40 L90 120' stroke='%238EC5E8' stroke-width='2'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%230A1628'/%3E%3Cpath d='M90 40 L140 140 L90 120 L40 140 Z' fill='%23ffffff' stroke='%235BA3D0' stroke-width='3'/%3E%3Cpath d='M90 40 L90 120' stroke='%238EC5E8' stroke-width='2'/%3E%3C/svg%3E">
+
     <!-- Standard Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='70' font-size='70' text-anchor='middle'%3E⛵%3C/text%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230A1628'/%3E%3Cpath d='M50 25 L75 75 L50 65 L25 75 Z' fill='%23ffffff' stroke='%235BA3D0' stroke-width='2'/%3E%3Cpath d='M50 25 L50 65' stroke='%238EC5E8' stroke-width='1.5'/%3E%3C/svg%3E">
     
     <!-- Web App Manifest -->
     <link rel="manifest" href="data:application/json,%7B%22name%22%3A%22OBC%20Bridge%20Clearance%20Calculator%22%2C%22short_name%22%3A%22Bridge%20Calc%22%2C%22description%22%3A%22Calculate%20safe%20passage%20under%20Tamaki%20Drive%20bridge%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230A1628%22%2C%22theme_color%22%3A%22%230A1628%22%2C%22orientation%22%3A%22portrait%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22icon-192.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%7D%2C%7B%22src%22%3A%22icon-512.png%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fpng%22%7D%5D%7D">
@@ -100,7 +101,8 @@
         }
 
         .hero-header {
-            padding: 40px 0 20px;
+            padding: 60px 0 20px;
+            padding-top: max(60px, calc(env(safe-area-inset-top) + 40px));
             text-align: center;
             position: relative;
         }
@@ -207,9 +209,13 @@
 
         .span-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 16px;
             margin-bottom: 16px;
+        }
+
+        .span-grid:has(.span-option:only-child) {
+            grid-template-columns: 1fr;
         }
 
         .span-option {
@@ -312,7 +318,8 @@
         input[type="date"],
         input[type="time"],
         input[type="text"],
-        input[type="number"] {
+        input[type="number"],
+        select {
             width: 100%;
             max-width: 100%;
             min-width: 0;
@@ -329,6 +336,20 @@
             -webkit-appearance: none;
             appearance: none;
             display: block;
+        }
+
+        select {
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 45px;
+        }
+
+        select option {
+            background: var(--ocean-dark);
+            color: white;
         }
         
         input[type="date"]::-webkit-datetime-edit {
@@ -402,7 +423,8 @@
             color: rgba(255, 255, 255, 0.4);
         }
 
-        input:focus {
+        input:focus,
+        select:focus {
             outline: none;
             background: rgba(255, 255, 255, 0.15);
             border-color: var(--foam);
@@ -1008,7 +1030,30 @@
         <div class="glass-card">
             <div class="card-header">
                 <div class="card-icon">🌉</div>
-                <h2 class="card-title">Select Bridge Span</h2>
+                <h2 class="card-title">Select Bridge</h2>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Bridge Location</label>
+                <select id="bridgeSelect" onchange="onBridgeChange()">
+                    <option value="obc">OBC Bridge - Tamaki Drive</option>
+                    <option value="panmure">Panmure Bridge - Tamaki River</option>
+                    <option value="custom">Custom Bridge</option>
+                </select>
+            </div>
+            <div id="customChartDatumSection" class="form-group hidden">
+                <label class="form-label">Chart Datum (optional)</label>
+                <div class="input-wrapper">
+                    <input type="number" id="customChartDatum" step="0.01" placeholder="0.00">
+                    <span class="input-unit">m</span>
+                </div>
+                <p class="input-hint">Vertical offset from LAT (Lowest Astronomical Tide). Default: 0m</p>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="card-header">
+                <div class="card-icon">📏</div>
+                <h2 class="card-title">Bridge Clearance</h2>
             </div>
             <div class="span-grid">
                 <div class="span-option selected" onclick="selectSpan('in-out', 6.2)">
@@ -1090,9 +1135,45 @@
         </div>
     </div>
 
-    <div class="validation-badge">✓ v7.2</div>
+    <div class="validation-badge">✓ v8.0</div>
 
     <script>
+        // Bridge Configuration System
+        const bridgeConfigs = {
+            obc: {
+                name: 'OBC Bridge',
+                location: 'Tamaki Drive, Auckland',
+                tideStation: 'Auckland',
+                spans: [
+                    { id: 'in-out', label: 'In/Out', clearance: 6.2 },
+                    { id: 'high', label: 'High', clearance: 6.5 }
+                ],
+                chartDatum: 0, // OBC clearances already referenced to chart datum
+                defaultSpan: 'in-out'
+            },
+            panmure: {
+                name: 'Panmure Bridge',
+                location: 'Tamaki River, Auckland',
+                tideStation: 'Auckland',
+                spans: [
+                    { id: 'main', label: 'Main Span', clearance: 4.5 }
+                ],
+                chartDatum: 0,
+                defaultSpan: 'main'
+            },
+            custom: {
+                name: 'Custom Bridge',
+                location: 'User Defined',
+                tideStation: 'Auckland',
+                spans: [
+                    { id: 'span1', label: 'Span 1', clearance: 5.0 }
+                ],
+                chartDatum: 0,
+                defaultSpan: 'span1'
+            }
+        };
+
+        let currentBridge = 'obc';
         let selectedSpanClearance = 6.2;
         let selectedSpanName = 'IN/OUT';
         let tideData = [];
@@ -1187,18 +1268,65 @@
         const day = String(nzDate.getDate()).padStart(2, '0');
         document.getElementById('tideDate').value = `${year}-${month}-${day}`;
 
-        function selectSpan(spanType, clearance) {
-            selectedSpanClearance = clearance;
-            selectedSpanName = spanType === 'high' ? 'HIGH' : 'IN/OUT';
-            
-            document.querySelectorAll('.span-option').forEach((card, index) => {
-                if ((spanType === 'in-out' && index === 0) || (spanType === 'high' && index === 1)) {
-                    card.classList.add('selected');
-                } else {
-                    card.classList.remove('selected');
-                }
-            });
+        // Bridge Management Functions
+        function onBridgeChange() {
+            const bridgeId = document.getElementById('bridgeSelect').value;
+            currentBridge = bridgeId;
+
+            // Show/hide custom chart datum section
+            const customSection = document.getElementById('customChartDatumSection');
+            if (bridgeId === 'custom') {
+                customSection.classList.remove('hidden');
+            } else {
+                customSection.classList.add('hidden');
+            }
+
+            // Update the span selector UI
+            updateSpanSelector();
+
+            // Clear previous results
+            document.getElementById('resultContainer').innerHTML = '';
+
+            // Clear cached tide data to force reload
+            tideData = [];
+            fullDayTideData = [];
+            lastLoadedDate = null;
         }
+
+        function updateSpanSelector() {
+            const config = bridgeConfigs[currentBridge];
+            const spanGrid = document.querySelector('.span-grid');
+
+            // Generate HTML for spans
+            spanGrid.innerHTML = config.spans.map((span, index) => `
+                <div class="span-option ${span.id === config.defaultSpan ? 'selected' : ''}"
+                     onclick="selectSpan('${span.id}', ${span.clearance}, '${span.label}')">
+                    <div class="span-label">${span.label}</div>
+                    <div class="span-value">${span.clearance}m</div>
+                </div>
+            `).join('');
+
+            // Set default span
+            const defaultSpan = config.spans.find(s => s.id === config.defaultSpan);
+            selectedSpanClearance = defaultSpan.clearance;
+            selectedSpanName = defaultSpan.label.toUpperCase();
+        }
+
+        function selectSpan(spanId, clearance, label) {
+            selectedSpanClearance = clearance;
+            selectedSpanName = label.toUpperCase();
+
+            document.querySelectorAll('.span-option').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            event.target.closest('.span-option').classList.add('selected');
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateSpanSelector();
+        });
 
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
