@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bridge Calculator - Local Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #0A1628 0%, #1B3A5F 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section h2 {
+            color: #0A1628;
+            margin-top: 0;
+        }
+        .test-list {
+            list-style: none;
+            padding: 0;
+        }
+        .test-list li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            border-left: 4px solid #2E5C8A;
+            border-radius: 4px;
+        }
+        .test-list li code {
+            background: #e8e8e8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .iframe-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        iframe {
+            width: 100%;
+            height: 800px;
+            border: 2px solid #0A1628;
+            border-radius: 8px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #0A1628;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #1B3A5F;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌉 Bridge Clearance Calculator - Local Testing</h1>
+        <p>Version 8.0 - Multi-Bridge Support with iOS Improvements</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Quick Test Checklist</h2>
+        <ul class="test-list">
+            <li>✓ <strong>Bridge Selector:</strong> Change between OBC, Panmure, and Custom bridges</li>
+            <li>✓ <strong>OBC Bridge:</strong> Verify two spans (6.2m / 6.5m) appear and work correctly</li>
+            <li>✓ <strong>Panmure Bridge:</strong> Verify single span (4.5m) appears centered</li>
+            <li>✓ <strong>Custom Bridge:</strong> Verify chart datum input appears when selected</li>
+            <li>✓ <strong>Tide Calculation:</strong> Enter a date, time, boat height, and click "Check Now"</li>
+            <li>✓ <strong>Find Times:</strong> Click "Find Times" to see all safe passage windows</li>
+            <li>✓ <strong>iOS Padding:</strong> Check if boat icon has proper spacing at top (desktop will show extra padding)</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Scenarios</h2>
+        <div class="button-group">
+            <button onclick="loadOBCTest()">Test OBC Bridge</button>
+            <button onclick="loadPanmureTest()">Test Panmure Bridge</button>
+            <button onclick="loadCustomTest()">Test Custom Bridge</button>
+            <button onclick="reloadApp()">Reload App</button>
+        </div>
+        <div id="testStatus"></div>
+    </div>
+
+    <div class="iframe-container">
+        <h2>Live Application Preview</h2>
+        <div class="status info">
+            <strong>Tip:</strong> Use your browser's developer tools (F12) to check for JavaScript errors.
+            The calculator will fetch real tide data from LINZ when you perform calculations.
+        </div>
+        <iframe id="appFrame" src="index.html"></iframe>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Results by Bridge</h2>
+
+        <h3>OBC Bridge - Tamaki Drive</h3>
+        <ul class="test-list">
+            <li><strong>Spans:</strong> Should show 2 options (In/Out: 6.2m, High: 6.5m)</li>
+            <li><strong>Default:</strong> In/Out span selected by default</li>
+            <li><strong>Chart Datum:</strong> No custom input field visible</li>
+            <li><strong>Test Time:</strong> Try low tide times for safe passage, high tide for unsafe</li>
+        </ul>
+
+        <h3>Panmure Bridge - Tamaki River</h3>
+        <ul class="test-list">
+            <li><strong>Spans:</strong> Should show 1 option (Main Span: 4.5m) - full width</li>
+            <li><strong>Default:</strong> Main span selected automatically</li>
+            <li><strong>Chart Datum:</strong> No custom input field visible</li>
+            <li><strong>Test Time:</strong> Lower clearance means fewer safe passage times</li>
+        </ul>
+
+        <h3>Custom Bridge</h3>
+        <ul class="test-list">
+            <li><strong>Spans:</strong> Should show 1 option (Span 1: 5.0m)</li>
+            <li><strong>Default:</strong> Span 1 selected automatically</li>
+            <li><strong>Chart Datum:</strong> Custom input field should appear</li>
+            <li><strong>Test Input:</strong> Try entering custom chart datum value (e.g., 0.5m)</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>How to Test Locally</h2>
+        <ol>
+            <li>Open <code>index.html</code> directly in your browser (double-click the file)</li>
+            <li>Or use this test page to preview the app in the iframe above</li>
+            <li>For mobile testing:
+                <ul>
+                    <li>Start a local server: <code>python3 -m http.server 8080</code></li>
+                    <li>On your phone, navigate to: <code>http://[your-computer-ip]:8080</code></li>
+                    <li>Test iOS features (Dynamic Island padding, home screen icon)</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>Common Issues & Solutions</h2>
+        <ul class="test-list">
+            <li><strong>Tide data not loading:</strong> Check browser console (F12) for CORS errors. The app uses a CORS proxy which should work.</li>
+            <li><strong>Bridge selector not changing spans:</strong> Check JavaScript console for errors. Make sure the page fully loaded.</li>
+            <li><strong>Custom datum field not showing:</strong> Select "Custom Bridge" from dropdown - field should appear below.</li>
+            <li><strong>iOS icon not showing emoji:</strong> This is expected! We replaced emoji with SVG icon for better iOS compatibility.</li>
+        </ul>
+    </div>
+
+    <script>
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('testStatus');
+            status.className = 'status ' + type;
+            status.textContent = message;
+        }
+
+        function loadOBCTest() {
+            showStatus('Testing OBC Bridge: Should show 2 spans (6.2m, 6.5m). Original functionality preserved.', 'info');
+            const iframe = document.getElementById('appFrame');
+            iframe.contentWindow.postMessage({action: 'selectBridge', bridge: 'obc'}, '*');
+        }
+
+        function loadPanmureTest() {
+            showStatus('Testing Panmure Bridge: Should show 1 span (4.5m) at full width. New feature.', 'info');
+            const iframe = document.getElementById('appFrame');
+            iframe.contentWindow.postMessage({action: 'selectBridge', bridge: 'panmure'}, '*');
+        }
+
+        function loadCustomTest() {
+            showStatus('Testing Custom Bridge: Should show chart datum input field. Try entering a custom value.', 'info');
+            const iframe = document.getElementById('appFrame');
+            iframe.contentWindow.postMessage({action: 'selectBridge', bridge: 'custom'}, '*');
+        }
+
+        function reloadApp() {
+            showStatus('Reloading application...', 'info');
+            document.getElementById('appFrame').src = 'index.html?' + Date.now();
+        }
+
+        // Listen for load complete
+        document.getElementById('appFrame').onload = function() {
+            showStatus('✓ Application loaded successfully! Ready for testing.', 'success');
+        };
+    </script>
+</body>
+</html>
