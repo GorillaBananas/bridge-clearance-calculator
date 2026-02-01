@@ -977,6 +977,172 @@
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
 
+        /* Cache status indicator */
+        .cache-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+
+        .cache-status-icon {
+            font-size: 14px;
+        }
+
+        .cache-status-text {
+            opacity: 0.85;
+            flex: 1;
+        }
+
+        .cache-status.cached {
+            border: 1px solid rgba(107, 207, 127, 0.3);
+        }
+
+        .cache-status.fresh {
+            border: 1px solid rgba(78, 205, 196, 0.3);
+        }
+
+        /* Force refresh checkbox */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--foam);
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            font-size: 13px;
+            opacity: 0.9;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .checkbox-hint {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-left: 28px;
+            margin-top: 4px;
+        }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg,
+                rgba(255, 255, 255, 0.05) 25%,
+                rgba(255, 255, 255, 0.1) 50%,
+                rgba(255, 255, 255, 0.05) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .skeleton-text {
+            height: 16px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-text.short {
+            width: 60%;
+        }
+
+        .skeleton-text.medium {
+            width: 80%;
+        }
+
+        .skeleton-card {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            margin-bottom: 16px;
+        }
+
+        /* Error panel with retry */
+        .error-panel {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin: 16px 0;
+            text-align: center;
+        }
+
+        .error-panel-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .error-panel-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #ef4444;
+        }
+
+        .error-panel-message {
+            font-size: 14px;
+            opacity: 0.85;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .error-panel-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-retry {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-retry:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-use-cache {
+            background: rgba(107, 207, 127, 0.2);
+            border: 1px solid rgba(107, 207, 127, 0.4);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-use-cache:hover {
+            background: rgba(107, 207, 127, 0.3);
+        }
+
         .hidden {
             display: none !important;
         }
@@ -1038,6 +1204,15 @@
                 <label class="form-label">Time</label>
                 <input type="text" id="preferredTime" placeholder="e.g. 1430" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5">
             </div>
+            <div class="checkbox-group" onclick="document.getElementById('forceRefresh').click()">
+                <input type="checkbox" id="forceRefresh">
+                <label for="forceRefresh">Force refresh tide data</label>
+            </div>
+            <p class="checkbox-hint">Fetches fresh data from LINZ (slower than using cached data)</p>
+            <div id="cacheStatus" class="cache-status hidden">
+                <span class="cache-status-icon">📦</span>
+                <span class="cache-status-text">Checking data status...</span>
+            </div>
         </div>
 
         <div class="glass-card">
@@ -1070,6 +1245,16 @@
             </div>
         </div>
 
+        <div id="errorPanel" class="error-panel hidden">
+            <div class="error-panel-icon">⚠️</div>
+            <div class="error-panel-title">Unable to Load Tide Data</div>
+            <div class="error-panel-message" id="errorMessage">An error occurred while fetching tide data.</div>
+            <div class="error-panel-actions">
+                <button class="btn-retry" onclick="retryLoadTideData()">🔄 Try Again</button>
+                <button class="btn-use-cache hidden" id="useCacheBtn" onclick="loadFromCache()">📦 Use Cached Data</button>
+            </div>
+        </div>
+
         <div id="toastContainer"></div>
         <div id="resultContainer"></div>
 
@@ -1089,7 +1274,7 @@
         </div>
     </div>
 
-    <div class="validation-badge">✓ v8.7</div>
+    <div class="validation-badge">✓ v9.1</div>
 
     <script>
         let selectedSpanClearance = 6.2;
@@ -1101,12 +1286,82 @@
         let prevDayLastPoint = null; // Cache previous day's last point
 
         // ============================================================
+        // BRIDGE CONFIGURATION (Multi-bridge support - future feature)
+        // ============================================================
+        // This configuration prepares the codebase for supporting multiple
+        // bridges in the future. Currently only Tamaki Drive is active.
+        // To add a new bridge:
+        // 1. Add entry to BridgeConfig.bridges
+        // 2. Add UI selector (when ready to publish)
+        // 3. Update calculations to use selected bridge config
+        // ============================================================
+
+        const BridgeConfig = {
+            // Currently selected bridge
+            currentBridge: 'tamaki-drive',
+
+            // Available bridges (expandable)
+            bridges: {
+                'tamaki-drive': {
+                    id: 'tamaki-drive',
+                    name: 'Tamaki Drive Bridge',
+                    location: 'Auckland, NZ',
+                    coordinates: { lat: -36.85277381522325, lng: 174.80464067734198 },
+                    spans: {
+                        'in-out': { name: 'IN/OUT', clearance: 6.2 },
+                        'high': { name: 'HIGH', clearance: 6.5 }
+                    },
+                    defaultSpan: 'in-out',
+                    tideStation: 'Auckland',
+                    notes: 'OBC Bridge - Outboard Boating Club access'
+                }
+                // Future bridges can be added here:
+                // 'other-bridge': {
+                //     id: 'other-bridge',
+                //     name: 'Other Bridge Name',
+                //     location: 'Location',
+                //     coordinates: { lat: 0, lng: 0 },
+                //     spans: { ... },
+                //     defaultSpan: 'main',
+                //     tideStation: 'Auckland',
+                //     notes: ''
+                // }
+            },
+
+            // Get current bridge config
+            getCurrentBridge() {
+                return this.bridges[this.currentBridge];
+            },
+
+            // Get span clearance for current bridge
+            getSpanClearance(spanId) {
+                const bridge = this.getCurrentBridge();
+                return bridge?.spans[spanId]?.clearance || 6.2;
+            },
+
+            // Get all available bridges (for future UI)
+            getAvailableBridges() {
+                return Object.values(this.bridges);
+            },
+
+            // Set current bridge (for future UI)
+            setCurrentBridge(bridgeId) {
+                if (this.bridges[bridgeId]) {
+                    this.currentBridge = bridgeId;
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        // ============================================================
         // TIDE DATA SERVICE CONFIGURATION
         // ============================================================
         // This service abstraction supports:
         // 1. Multiple CORS proxy fallbacks
         // 2. Better error handling with specific messages
-        // 3. Future support for embedded/cached local data (Option 3)
+        // 3. localStorage caching with optional force refresh
+        // 4. Future support for multiple bridges
         // ============================================================
 
         const TideDataService = {
@@ -1137,15 +1392,15 @@
                 // Fetch settings
                 fetchTimeout: 8000,  // 8 seconds per proxy attempt
 
-                // Future: Embedded data configuration (Option 3)
-                // When implemented, set useEmbeddedData: true and populate embeddedData
-                useEmbeddedData: false,
-                embeddedData: null,  // Will hold { year: csvText } when implemented
-                embeddedDataHashes: null  // Will hold { year: sha256Hash } for verification
+                // Cache settings
+                cacheKeyPrefix: 'tideData_',
+                cacheMetaKey: 'tideDataMeta',
+                cacheDurationDays: 30  // How long to keep cached data
             },
 
-            // Track which proxy is currently working (for logging)
+            // Track state
             lastSuccessfulProxy: null,
+            lastDataSource: null,  // 'cache' or proxy name
 
             // Error types for better user feedback
             ErrorTypes: {
@@ -1154,8 +1409,146 @@
                 YEAR_UNAVAILABLE: 'year_unavailable',
                 PARSE_ERROR: 'parse_error',
                 NO_DATA: 'no_data',
-                TIMEOUT: 'timeout'
+                TIMEOUT: 'timeout',
+                CACHE_ERROR: 'cache_error'
             },
+
+            // ============================================================
+            // CACHE MANAGEMENT
+            // ============================================================
+
+            // Check if localStorage is available
+            isStorageAvailable() {
+                try {
+                    const test = '__storage_test__';
+                    localStorage.setItem(test, test);
+                    localStorage.removeItem(test);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            },
+
+            // Get cached data for a year
+            getCachedData(year) {
+                if (!this.isStorageAvailable()) return null;
+
+                try {
+                    const key = this.config.cacheKeyPrefix + year;
+                    const cached = localStorage.getItem(key);
+                    if (!cached) return null;
+
+                    const data = JSON.parse(cached);
+                    const cacheDate = new Date(data.timestamp);
+                    const now = new Date();
+                    const daysDiff = (now - cacheDate) / (1000 * 60 * 60 * 24);
+
+                    // Check if cache is still valid
+                    if (daysDiff > this.config.cacheDurationDays) {
+                        console.log(`Cache for ${year} expired (${Math.round(daysDiff)} days old)`);
+                        this.clearCacheForYear(year);
+                        return null;
+                    }
+
+                    console.log(`✓ Found valid cache for ${year} (${Math.round(daysDiff)} days old)`);
+                    return data;
+                } catch (e) {
+                    console.warn('Error reading cache:', e);
+                    return null;
+                }
+            },
+
+            // Save data to cache
+            setCachedData(year, csvText) {
+                if (!this.isStorageAvailable()) return false;
+
+                try {
+                    const key = this.config.cacheKeyPrefix + year;
+                    const data = {
+                        year: year,
+                        csvText: csvText,
+                        timestamp: new Date().toISOString(),
+                        recordCount: csvText.split('\n').length
+                    };
+                    localStorage.setItem(key, JSON.stringify(data));
+
+                    // Update meta info
+                    this.updateCacheMeta(year);
+
+                    console.log(`✓ Cached data for ${year} (${data.recordCount} records)`);
+                    return true;
+                } catch (e) {
+                    console.warn('Error saving to cache:', e);
+                    return false;
+                }
+            },
+
+            // Update cache metadata
+            updateCacheMeta(year) {
+                try {
+                    const meta = this.getCacheMeta();
+                    meta.years[year] = {
+                        cachedAt: new Date().toISOString()
+                    };
+                    meta.lastUpdated = new Date().toISOString();
+                    localStorage.setItem(this.config.cacheMetaKey, JSON.stringify(meta));
+                } catch (e) {
+                    console.warn('Error updating cache meta:', e);
+                }
+            },
+
+            // Get cache metadata
+            getCacheMeta() {
+                try {
+                    const meta = localStorage.getItem(this.config.cacheMetaKey);
+                    return meta ? JSON.parse(meta) : { years: {}, lastUpdated: null };
+                } catch (e) {
+                    return { years: {}, lastUpdated: null };
+                }
+            },
+
+            // Clear cache for a specific year
+            clearCacheForYear(year) {
+                try {
+                    localStorage.removeItem(this.config.cacheKeyPrefix + year);
+                    const meta = this.getCacheMeta();
+                    delete meta.years[year];
+                    localStorage.setItem(this.config.cacheMetaKey, JSON.stringify(meta));
+                } catch (e) {
+                    console.warn('Error clearing cache:', e);
+                }
+            },
+
+            // Clear all tide data cache
+            clearAllCache() {
+                if (!this.isStorageAvailable()) return;
+
+                try {
+                    this.config.availableYears.forEach(year => {
+                        localStorage.removeItem(this.config.cacheKeyPrefix + year);
+                    });
+                    localStorage.removeItem(this.config.cacheMetaKey);
+                    console.log('✓ All tide data cache cleared');
+                } catch (e) {
+                    console.warn('Error clearing all cache:', e);
+                }
+            },
+
+            // Get cache status for display
+            getCacheStatus() {
+                const meta = this.getCacheMeta();
+                const cachedYears = Object.keys(meta.years);
+                return {
+                    hasCachedData: cachedYears.length > 0,
+                    cachedYears: cachedYears.map(Number),
+                    lastUpdated: meta.lastUpdated ? new Date(meta.lastUpdated) : null,
+                    isStorageAvailable: this.isStorageAvailable()
+                };
+            },
+
+            // ============================================================
+            // ERROR HANDLING
+            // ============================================================
 
             // Create a detailed error object
             createError(type, message, details = {}) {
@@ -1183,10 +1576,16 @@
                         return `No tide data found for ${details.date || 'the selected date'}.`;
                     case this.ErrorTypes.TIMEOUT:
                         return 'Request timed out. The server may be slow - please try again.';
+                    case this.ErrorTypes.CACHE_ERROR:
+                        return 'Error accessing cached data. Try refreshing the page.';
                     default:
                         return 'An unexpected error occurred. Please try again.';
                 }
             },
+
+            // ============================================================
+            // DATA FETCHING
+            // ============================================================
 
             // Fetch with timeout wrapper
             async fetchWithTimeout(url, timeout) {
@@ -1209,19 +1608,6 @@
             // Try fetching through multiple CORS proxies
             async fetchWithFallback(originalUrl, context = 'data') {
                 const errors = [];
-
-                // Future: Check for embedded data first (Option 3)
-                // if (this.config.useEmbeddedData && this.config.embeddedData) {
-                //     const yearMatch = originalUrl.match(/Auckland%20(\d{4})/);
-                //     if (yearMatch && this.config.embeddedData[yearMatch[1]]) {
-                //         console.log(`→ Using embedded data for ${yearMatch[1]}`);
-                //         return {
-                //             ok: true,
-                //             text: async () => this.config.embeddedData[yearMatch[1]],
-                //             source: 'embedded'
-                //         };
-                //     }
-                // }
 
                 for (let i = 0; i < this.config.corsProxies.length; i++) {
                     const proxy = this.config.corsProxies[i];
@@ -1265,7 +1651,7 @@
             },
 
             // Main method to fetch tide CSV data for a year
-            async fetchTideDataForYear(year) {
+            async fetchTideDataForYear(year, forceRefresh = false) {
                 // Validate year
                 if (!this.config.availableYears.includes(year)) {
                     throw this.createError(
@@ -1275,23 +1661,53 @@
                     );
                 }
 
+                // Check cache first (unless force refresh)
+                if (!forceRefresh) {
+                    const cached = this.getCachedData(year);
+                    if (cached) {
+                        this.lastDataSource = 'cache';
+                        return {
+                            ok: true,
+                            text: async () => cached.csvText,
+                            source: 'cache',
+                            cachedAt: cached.timestamp
+                        };
+                    }
+                } else {
+                    console.log('→ Force refresh requested, skipping cache');
+                }
+
                 const csvUrl = `${this.config.linzBaseUrl}${year}.csv`;
                 console.log(`=== Fetching tide data for ${year} ===`);
                 console.log(`Source URL: ${csvUrl}`);
 
-                return await this.fetchWithFallback(csvUrl, `year ${year}`);
+                const response = await this.fetchWithFallback(csvUrl, `year ${year}`);
+
+                // Cache the data for future use
+                const csvText = await response.text();
+                this.setCachedData(year, csvText);
+                this.lastDataSource = response.source;
+
+                return {
+                    ok: true,
+                    text: async () => csvText,
+                    source: response.source,
+                    freshlyFetched: true
+                };
             },
 
             // Log service status (useful for debugging)
             logStatus() {
                 console.log('=== TideDataService Status ===');
                 console.log('Last successful proxy:', this.lastSuccessfulProxy || 'none');
-                console.log('Use embedded data:', this.config.useEmbeddedData);
+                console.log('Last data source:', this.lastDataSource || 'none');
+                const cacheStatus = this.getCacheStatus();
+                console.log('Cache status:', cacheStatus);
                 console.log('Available proxies:', this.config.corsProxies.map(p => p.name).join(', '));
             }
         };
 
-        async function getNextDayFirstPoint(currentDate) {
+        async function getNextDayFirstPoint(currentDate, forceRefresh = false) {
             try {
                 console.log('=== LOADING NEXT DAY DATA ===');
                 const selectedDate = new Date(currentDate);
@@ -1300,8 +1716,8 @@
 
                 const year = selectedDate.getFullYear();
 
-                // Use TideDataService for fetching with fallback proxies
-                const response = await TideDataService.fetchTideDataForYear(year);
+                // Use TideDataService for fetching with cache support
+                const response = await TideDataService.fetchTideDataForYear(year, forceRefresh);
                 console.log(`Response from: ${response.source}`);
 
                 const csvText = await response.text();
@@ -1329,7 +1745,7 @@
             }
         }
 
-        async function getPrevDayLastPoint(currentDate) {
+        async function getPrevDayLastPoint(currentDate, forceRefresh = false) {
             try {
                 console.log('=== LOADING PREV DAY DATA ===');
                 const selectedDate = new Date(currentDate);
@@ -1338,8 +1754,8 @@
 
                 const year = selectedDate.getFullYear();
 
-                // Use TideDataService for fetching with fallback proxies
-                const response = await TideDataService.fetchTideDataForYear(year);
+                // Use TideDataService for fetching with cache support
+                const response = await TideDataService.fetchTideDataForYear(year, forceRefresh);
                 console.log(`Response from: ${response.source}`);
 
                 const csvText = await response.text();
@@ -1375,6 +1791,12 @@
         const day = String(nzDate.getDate()).padStart(2, '0');
         document.getElementById('tideDate').value = `${year}-${month}-${day}`;
 
+        // Initialize cache status on page load
+        updateCacheStatus();
+
+        // Update cache status when date changes
+        document.getElementById('tideDate').addEventListener('change', updateCacheStatus);
+
         function selectSpan(spanType, clearance) {
             selectedSpanClearance = clearance;
             selectedSpanName = spanType === 'high' ? 'HIGH' : 'IN/OUT';
@@ -1401,8 +1823,136 @@
             }, 3000);
         }
 
+        // Track last error for retry functionality
+        let lastLoadError = null;
+
+        // Update cache status display
+        function updateCacheStatus() {
+            const statusEl = document.getElementById('cacheStatus');
+            const dateInput = document.getElementById('tideDate').value;
+
+            if (!statusEl || !dateInput) return;
+
+            const selectedDate = new Date(dateInput + 'T00:00:00');
+            const year = selectedDate.getFullYear();
+            const cached = TideDataService.getCachedData(year);
+
+            statusEl.classList.remove('hidden', 'cached', 'fresh');
+
+            if (cached) {
+                const cachedDate = new Date(cached.timestamp);
+                const daysAgo = Math.round((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
+                const daysText = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;
+
+                statusEl.classList.add('cached');
+                statusEl.innerHTML = `
+                    <span class="cache-status-icon">📦</span>
+                    <span class="cache-status-text">Tide data for ${year} cached ${daysText}</span>
+                `;
+            } else {
+                statusEl.classList.add('fresh');
+                statusEl.innerHTML = `
+                    <span class="cache-status-icon">🌐</span>
+                    <span class="cache-status-text">Will fetch fresh data for ${year} from LINZ</span>
+                `;
+            }
+        }
+
+        // Show error panel
+        function showErrorPanel(errorMessage, showCacheOption = false) {
+            const panel = document.getElementById('errorPanel');
+            const msgEl = document.getElementById('errorMessage');
+            const cacheBtn = document.getElementById('useCacheBtn');
+
+            if (panel && msgEl) {
+                msgEl.textContent = errorMessage;
+                panel.classList.remove('hidden');
+
+                if (cacheBtn) {
+                    if (showCacheOption) {
+                        cacheBtn.classList.remove('hidden');
+                    } else {
+                        cacheBtn.classList.add('hidden');
+                    }
+                }
+            }
+        }
+
+        // Hide error panel
+        function hideErrorPanel() {
+            const panel = document.getElementById('errorPanel');
+            if (panel) {
+                panel.classList.add('hidden');
+            }
+        }
+
+        // Retry loading tide data
+        async function retryLoadTideData() {
+            hideErrorPanel();
+            await loadTideData();
+        }
+
+        // Load from cache (fallback when network fails)
+        async function loadFromCache() {
+            const dateInput = document.getElementById('tideDate').value;
+            if (!dateInput) return;
+
+            const selectedDate = new Date(dateInput + 'T00:00:00');
+            const year = selectedDate.getFullYear();
+            const cached = TideDataService.getCachedData(year);
+
+            if (!cached) {
+                showToast('No cached data available for this year', 'error');
+                return;
+            }
+
+            hideErrorPanel();
+
+            try {
+                tideData = parseLinzCsv(cached.csvText, selectedDate);
+                fullDayTideData = generateHourlyTideData(tideData, selectedDate);
+
+                if (tideData.length === 0) {
+                    showToast('Cached data appears to be invalid', 'error');
+                    return;
+                }
+
+                lastLoadedDate = dateInput;
+
+                // Try to load adjacent days from cache too
+                const nextDate = new Date(selectedDate);
+                nextDate.setDate(nextDate.getDate() + 1);
+                const prevDate = new Date(selectedDate);
+                prevDate.setDate(prevDate.getDate() - 1);
+
+                const nextYearCached = TideDataService.getCachedData(nextDate.getFullYear());
+                const prevYearCached = TideDataService.getCachedData(prevDate.getFullYear());
+
+                if (nextYearCached) {
+                    const nextDayData = parseLinzCsv(nextYearCached.csvText, nextDate);
+                    nextDayFirstPoint = nextDayData.length > 0 ? nextDayData[0] : null;
+                }
+
+                if (prevYearCached) {
+                    const prevDayData = parseLinzCsv(prevYearCached.csvText, prevDate);
+                    prevDayLastPoint = prevDayData.length > 0 ? prevDayData[prevDayData.length - 1] : null;
+                }
+
+                const cachedDate = new Date(cached.timestamp);
+                const daysAgo = Math.round((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
+                showToast(`Using cached data (${daysAgo} days old)`, 'success');
+
+                updateCacheStatus();
+
+            } catch (error) {
+                console.error('Error loading from cache:', error);
+                showToast('Failed to load cached data', 'error');
+            }
+        }
+
         async function loadTideData() {
             const dateInput = document.getElementById('tideDate').value;
+            const forceRefresh = document.getElementById('forceRefresh')?.checked || false;
 
             if (!dateInput) {
                 showToast('Please select a date', 'error');
@@ -1412,6 +1962,7 @@
             const loading = document.getElementById('loading');
             const loadingText = loading.querySelector('.loading-text');
             loading.classList.remove('hidden');
+            hideErrorPanel();
             document.getElementById('resultContainer').innerHTML = '';
 
             try {
@@ -1427,13 +1978,18 @@
                     );
                 }
 
-                // Update loading message
+                // Update loading message based on cache status
+                const cached = TideDataService.getCachedData(year);
                 if (loadingText) {
-                    loadingText.textContent = 'Connecting to tide data service...';
+                    if (cached && !forceRefresh) {
+                        loadingText.textContent = 'Loading from cache...';
+                    } else {
+                        loadingText.textContent = 'Connecting to tide data service...';
+                    }
                 }
 
-                // Use TideDataService for fetching with fallback proxies
-                const response = await TideDataService.fetchTideDataForYear(year);
+                // Use TideDataService for fetching (with cache support)
+                const response = await TideDataService.fetchTideDataForYear(year, forceRefresh);
                 console.log(`Main data fetched from: ${response.source}`);
 
                 if (loadingText) {
@@ -1460,8 +2016,8 @@
                 }
 
                 // Load adjacent day points for accurate interpolation
-                nextDayFirstPoint = await getNextDayFirstPoint(dateInput);
-                prevDayLastPoint = await getPrevDayLastPoint(dateInput);
+                nextDayFirstPoint = await getNextDayFirstPoint(dateInput, forceRefresh);
+                prevDayLastPoint = await getPrevDayLastPoint(dateInput, forceRefresh);
 
                 console.log('Tide data loaded for:', dateInput);
                 console.log('Tide data points:', tideData.length);
@@ -1469,11 +2025,31 @@
                 console.log('Data source:', response.source);
                 TideDataService.logStatus();
 
-                const sourceInfo = response.source !== 'embedded' ? ` (via ${response.source})` : '';
-                showToast(`Tide data loaded successfully${sourceInfo}`, 'success');
+                // Update cache status display
+                updateCacheStatus();
+
+                // Show appropriate success message
+                let sourceInfo = '';
+                if (response.source === 'cache') {
+                    const cachedData = TideDataService.getCachedData(year);
+                    if (cachedData) {
+                        const daysAgo = Math.round((new Date() - new Date(cachedData.timestamp)) / (1000 * 60 * 60 * 24));
+                        sourceInfo = ` (from cache, ${daysAgo}d old)`;
+                    }
+                } else {
+                    sourceInfo = ` (fresh from ${response.source})`;
+                }
+                showToast(`Tide data loaded${sourceInfo}`, 'success');
+
+                // Reset force refresh checkbox
+                const forceRefreshEl = document.getElementById('forceRefresh');
+                if (forceRefreshEl) forceRefreshEl.checked = false;
+
                 return true;
 
             } catch (error) {
+                lastLoadError = error;
+
                 // Enhanced error handling with user-friendly messages
                 let errorMessage;
                 if (error.type && error.userMessage) {
@@ -1486,7 +2062,14 @@
                     console.error('Load error:', error);
                 }
 
-                showToast(errorMessage, 'error');
+                // Check if we have cached data to fall back to
+                const selectedDate = new Date(dateInput + 'T00:00:00');
+                const year = selectedDate.getFullYear();
+                const hasCachedFallback = TideDataService.getCachedData(year) !== null;
+
+                // Show error panel with retry and optional cache fallback
+                showErrorPanel(errorMessage, hasCachedFallback);
+
                 return false;
             } finally {
                 // Reset loading text for next time

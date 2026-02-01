@@ -3,55 +3,84 @@
 ## Project Overview
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
+## Current Version
+**v9.1** - Displayed on floating badge (index.html line 1277)
+
+### Version History
+| Version | Changes |
+|---------|---------|
+| v9.1 | localStorage caching, force refresh option, error retry panel, multi-bridge prep |
+| v9.0 | Removed PWA manifest, CORS proxy fallbacks, time input fix |
+| v8.7 | Previous version |
+
+**Important**: When making significant changes, update the version badge at line 1277:
+```html
+<div class="validation-badge">✓ v9.1</div>
+```
+
 ## Key Architecture
 - Single HTML file (`index.html`) containing all HTML, CSS, and JavaScript
 - No build system or external dependencies
+- **Normal website** (not a PWA) - address bar and navigation buttons visible
 - Fetches tide data from LINZ (Land Information New Zealand) CSV files
-- Uses CORS proxies to bypass browser restrictions
+- Uses CORS proxies with localStorage caching for reliability
+
+## Features
+
+### localStorage Caching System
+- Tide data is cached in browser localStorage after first fetch
+- Cache expires after 30 days
+- Users can force refresh via checkbox
+- Falls back to cache when network fails
+
+### Multi-Bridge Support (Prepared, not published)
+- `BridgeConfig` object at line 1288 supports multiple bridges
+- Currently only Tamaki Drive is configured
+- UI not yet implemented - ready for future expansion
 
 ## Known Issues & Solutions
 
 ### 1. Tide Data Fetching Errors (CORS Proxy Failures)
 
-**Problem**: The app relies on external CORS proxies to fetch tide data from LINZ. These free proxies can be unreliable, rate-limited, or go offline.
+**Problem**: The app relies on external CORS proxies to fetch tide data from LINZ. These free proxies can be unreliable.
 
-**Solution Implemented** (index.html lines 1103-1278):
-- Created `TideDataService` abstraction with multiple CORS proxy fallbacks
-- Proxies tried in order: corsproxy.io → allorigins → codetabs
+**Solution Implemented**:
+- `TideDataService` with multiple CORS proxy fallbacks (corsproxy.io → allorigins → codetabs)
+- localStorage caching reduces network dependency
+- Error panel with retry button and "Use Cached Data" fallback
 - 8-second timeout per proxy attempt
-- User-friendly error messages for different failure types
 
-**Key Code Location**: `TideDataService` object at line 1112
-
-**Future Enhancement (Option 3)**: The code is structured to support embedded local tide data with SHA-256 verification. To implement:
-1. Set `TideDataService.config.useEmbeddedData = true`
-2. Populate `TideDataService.config.embeddedData` with `{ year: csvText }`
-3. Add hashes to `TideDataService.config.embeddedDataHashes`
-4. Uncomment the embedded data check in `fetchWithFallback()`
+**Key Code Location**: `TideDataService` object at line 1350
 
 ### 2. Time Input Field - Backspace/Delete Not Working
 
-**Problem**: The auto-colon insertion in the time input (HH:MM format) interfered with backspace/delete, making it difficult to correct mistakes.
+**Problem**: Auto-colon insertion interfered with backspace/delete.
 
-**Solution Implemented** (index.html lines 2130-2173):
+**Solution Implemented**:
 - Detect whether user is deleting or adding characters
-- When deleting: allow natural deletion, remove colon when ≤2 digits remain
-- When adding: auto-insert colon after 2 digits
-- Added Escape key shortcut to clear the entire field
+- Allow natural deletion past the colon
+- Escape key clears the entire field
 
-**Key Code Location**: Time input event listeners at line 2130
+**Key Code Location**: Time input event listeners at line 2490
+
+### 3. PWA Mode Hiding Browser Controls
+
+**Problem**: Web app manifest caused standalone mode on some devices.
+
+**Solution**: Removed manifest entirely - site always runs as normal website.
 
 ## Important Code Locations
 
 | Feature | Location |
 |---------|----------|
-| TideDataService (CORS fallbacks) | index.html:1112-1278 |
-| Tide fetching functions | index.html:1280-1370 |
-| Time input handling | index.html:2130-2173 |
-| CSV parsing (LINZ format) | index.html:1488-1553 |
-| NZ timezone/DST handling | index.html:1461-1485 |
-| Clearance calculation | index.html:1823-1927 |
-| Rule of Twelfths interpolation | index.html:1595-1730 |
+| BridgeConfig (multi-bridge) | index.html:1288-1345 |
+| TideDataService | index.html:1350-1640 |
+| Cache management | TideDataService methods |
+| Error panel & retry | index.html:1900-1970 |
+| loadTideData function | index.html:1990-2120 |
+| Time input handling | index.html:2490-2530 |
+| CSV parsing (LINZ format) | index.html:2030-2100 |
+| Clearance calculation | index.html:2180-2280 |
 
 ## Data Sources
 
@@ -73,20 +102,50 @@ Tests cover:
 
 ## Common Debugging
 
-### Check which CORS proxy succeeded
-Open browser console and look for:
-```
-→ Trying proxy 1/3: corsproxy.io
-✓ Success with corsproxy.io
-```
-
-### Verify TideDataService status
-In browser console:
+### Check TideDataService and cache status
 ```javascript
 TideDataService.logStatus()
+TideDataService.getCacheStatus()
 ```
 
-### Test tide data fetch manually
+### Clear all cached data
 ```javascript
-TideDataService.fetchTideDataForYear(2026).then(r => r.text()).then(console.log)
+TideDataService.clearAllCache()
 ```
+
+### Force fetch fresh data for a year
+```javascript
+TideDataService.fetchTideDataForYear(2026, true).then(r => r.text()).then(console.log)
+```
+
+### Check BridgeConfig
+```javascript
+BridgeConfig.getCurrentBridge()
+BridgeConfig.getAvailableBridges()
+```
+
+## UI Elements
+
+### Cache Status Indicator
+- Shows whether data will come from cache or network
+- Updates when date changes
+- Located below the Time input field
+
+### Force Refresh Checkbox
+- When checked, bypasses cache and fetches fresh data
+- Includes hint about slower speed
+- Auto-unchecks after successful load
+
+### Error Panel
+- Shows when data fetch fails
+- "Try Again" button for retry
+- "Use Cached Data" button (only if cache available)
+- Replaces simple toast for persistent errors
+
+## Future Enhancements
+
+### To add a new bridge:
+1. Add entry to `BridgeConfig.bridges` object
+2. Create UI selector component
+3. Update `selectSpan()` to use bridge config
+4. Update calculations to use `BridgeConfig.getSpanClearance()`
