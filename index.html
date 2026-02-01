@@ -1100,32 +1100,216 @@
         let nextDayFirstPoint = null; // Cache next day's first point
         let prevDayLastPoint = null; // Cache previous day's last point
 
+        // ============================================================
+        // TIDE DATA SERVICE CONFIGURATION
+        // ============================================================
+        // This service abstraction supports:
+        // 1. Multiple CORS proxy fallbacks
+        // 2. Better error handling with specific messages
+        // 3. Future support for embedded/cached local data (Option 3)
+        // ============================================================
+
+        const TideDataService = {
+            // Data source configuration
+            config: {
+                // Base URL for LINZ tide data
+                linzBaseUrl: 'https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20',
+
+                // Available years
+                availableYears: [2024, 2025, 2026, 2027, 2028],
+
+                // CORS proxies to try (in order of preference)
+                corsProxies: [
+                    {
+                        name: 'corsproxy.io',
+                        buildUrl: (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
+                    },
+                    {
+                        name: 'allorigins',
+                        buildUrl: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+                    },
+                    {
+                        name: 'codetabs',
+                        buildUrl: (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+                    }
+                ],
+
+                // Fetch settings
+                fetchTimeout: 8000,  // 8 seconds per proxy attempt
+
+                // Future: Embedded data configuration (Option 3)
+                // When implemented, set useEmbeddedData: true and populate embeddedData
+                useEmbeddedData: false,
+                embeddedData: null,  // Will hold { year: csvText } when implemented
+                embeddedDataHashes: null  // Will hold { year: sha256Hash } for verification
+            },
+
+            // Track which proxy is currently working (for logging)
+            lastSuccessfulProxy: null,
+
+            // Error types for better user feedback
+            ErrorTypes: {
+                NETWORK: 'network',
+                PROXY_ALL_FAILED: 'proxy_failed',
+                YEAR_UNAVAILABLE: 'year_unavailable',
+                PARSE_ERROR: 'parse_error',
+                NO_DATA: 'no_data',
+                TIMEOUT: 'timeout'
+            },
+
+            // Create a detailed error object
+            createError(type, message, details = {}) {
+                return {
+                    type: type,
+                    message: message,
+                    details: details,
+                    timestamp: new Date().toISOString(),
+                    userMessage: this.getUserFriendlyMessage(type, details)
+                };
+            },
+
+            // Get user-friendly error messages
+            getUserFriendlyMessage(type, details) {
+                switch (type) {
+                    case this.ErrorTypes.NETWORK:
+                        return 'Unable to connect to the internet. Please check your connection and try again.';
+                    case this.ErrorTypes.PROXY_ALL_FAILED:
+                        return `Unable to fetch tide data - all data sources unavailable. Tried ${details.proxyCount || 3} sources. Please try again later.`;
+                    case this.ErrorTypes.YEAR_UNAVAILABLE:
+                        return `Tide data is only available for years ${this.config.availableYears.join(', ')}.`;
+                    case this.ErrorTypes.PARSE_ERROR:
+                        return 'The tide data format has changed. Please report this issue.';
+                    case this.ErrorTypes.NO_DATA:
+                        return `No tide data found for ${details.date || 'the selected date'}.`;
+                    case this.ErrorTypes.TIMEOUT:
+                        return 'Request timed out. The server may be slow - please try again.';
+                    default:
+                        return 'An unexpected error occurred. Please try again.';
+                }
+            },
+
+            // Fetch with timeout wrapper
+            async fetchWithTimeout(url, timeout) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                try {
+                    const response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    return response;
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    if (error.name === 'AbortError') {
+                        throw new Error('TIMEOUT');
+                    }
+                    throw error;
+                }
+            },
+
+            // Try fetching through multiple CORS proxies
+            async fetchWithFallback(originalUrl, context = 'data') {
+                const errors = [];
+
+                // Future: Check for embedded data first (Option 3)
+                // if (this.config.useEmbeddedData && this.config.embeddedData) {
+                //     const yearMatch = originalUrl.match(/Auckland%20(\d{4})/);
+                //     if (yearMatch && this.config.embeddedData[yearMatch[1]]) {
+                //         console.log(`→ Using embedded data for ${yearMatch[1]}`);
+                //         return {
+                //             ok: true,
+                //             text: async () => this.config.embeddedData[yearMatch[1]],
+                //             source: 'embedded'
+                //         };
+                //     }
+                // }
+
+                for (let i = 0; i < this.config.corsProxies.length; i++) {
+                    const proxy = this.config.corsProxies[i];
+                    const proxyUrl = proxy.buildUrl(originalUrl);
+
+                    console.log(`→ Trying proxy ${i + 1}/${this.config.corsProxies.length}: ${proxy.name}`);
+
+                    try {
+                        const response = await this.fetchWithTimeout(proxyUrl, this.config.fetchTimeout);
+
+                        if (response.ok) {
+                            console.log(`✓ Success with ${proxy.name}`);
+                            this.lastSuccessfulProxy = proxy.name;
+
+                            // Wrap the response to track source
+                            const text = await response.text();
+                            return {
+                                ok: true,
+                                text: async () => text,
+                                source: proxy.name,
+                                status: response.status
+                            };
+                        } else {
+                            console.warn(`✗ ${proxy.name} returned status ${response.status}`);
+                            errors.push({ proxy: proxy.name, status: response.status });
+                        }
+                    } catch (error) {
+                        const errorMsg = error.message === 'TIMEOUT' ? 'timeout' : error.message;
+                        console.warn(`✗ ${proxy.name} failed: ${errorMsg}`);
+                        errors.push({ proxy: proxy.name, error: errorMsg });
+                    }
+                }
+
+                // All proxies failed
+                console.error('✗✗✗ All CORS proxies failed:', errors);
+                throw this.createError(
+                    this.ErrorTypes.PROXY_ALL_FAILED,
+                    'All CORS proxies failed',
+                    { errors: errors, proxyCount: this.config.corsProxies.length, context: context }
+                );
+            },
+
+            // Main method to fetch tide CSV data for a year
+            async fetchTideDataForYear(year) {
+                // Validate year
+                if (!this.config.availableYears.includes(year)) {
+                    throw this.createError(
+                        this.ErrorTypes.YEAR_UNAVAILABLE,
+                        `Year ${year} not available`,
+                        { year: year, availableYears: this.config.availableYears }
+                    );
+                }
+
+                const csvUrl = `${this.config.linzBaseUrl}${year}.csv`;
+                console.log(`=== Fetching tide data for ${year} ===`);
+                console.log(`Source URL: ${csvUrl}`);
+
+                return await this.fetchWithFallback(csvUrl, `year ${year}`);
+            },
+
+            // Log service status (useful for debugging)
+            logStatus() {
+                console.log('=== TideDataService Status ===');
+                console.log('Last successful proxy:', this.lastSuccessfulProxy || 'none');
+                console.log('Use embedded data:', this.config.useEmbeddedData);
+                console.log('Available proxies:', this.config.corsProxies.map(p => p.name).join(', '));
+            }
+        };
+
         async function getNextDayFirstPoint(currentDate) {
             try {
                 console.log('=== LOADING NEXT DAY DATA ===');
                 const selectedDate = new Date(currentDate);
                 selectedDate.setDate(selectedDate.getDate() + 1); // Tomorrow
                 console.log('Next day date:', selectedDate.toISOString().split('T')[0]);
-                
+
                 const year = selectedDate.getFullYear();
-                const csvUrl = `https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20${year}.csv`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(csvUrl)}`;
-                
-                console.log('Fetching from:', proxyUrl);
-                const response = await fetch(proxyUrl);
-                console.log('Response status:', response.status, response.ok ? 'OK' : 'FAILED');
-                
-                if (!response.ok) {
-                    console.error('Failed to fetch next day data');
-                    return null;
-                }
-                
+
+                // Use TideDataService for fetching with fallback proxies
+                const response = await TideDataService.fetchTideDataForYear(year);
+                console.log(`Response from: ${response.source}`);
+
                 const csvText = await response.text();
                 console.log('CSV text length:', csvText.length);
-                
+
                 const nextDayData = parseLinzCsv(csvText, selectedDate);
                 console.log('Parsed next day points:', nextDayData.length);
-                
+
                 if (nextDayData.length > 0) {
                     console.log(`✓✓✓ SUCCESS: Next day first point: ${nextDayData[0].time.toISOString()} at ${nextDayData[0].height}m`);
                     return nextDayData[0]; // Return first point of next day
@@ -1134,7 +1318,13 @@
                     return null;
                 }
             } catch (error) {
-                console.error('✗✗✗ ERROR loading next day data:', error);
+                // Enhanced error logging
+                if (error.type && error.userMessage) {
+                    console.error('✗✗✗ ERROR loading next day data:', error.userMessage);
+                    console.error('Error details:', error.details);
+                } else {
+                    console.error('✗✗✗ ERROR loading next day data:', error);
+                }
                 return null;
             }
         }
@@ -1145,26 +1335,19 @@
                 const selectedDate = new Date(currentDate);
                 selectedDate.setDate(selectedDate.getDate() - 1); // Yesterday
                 console.log('Prev day date:', selectedDate.toISOString().split('T')[0]);
-                
+
                 const year = selectedDate.getFullYear();
-                const csvUrl = `https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20${year}.csv`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(csvUrl)}`;
-                
-                console.log('Fetching from:', proxyUrl);
-                const response = await fetch(proxyUrl);
-                console.log('Response status:', response.status, response.ok ? 'OK' : 'FAILED');
-                
-                if (!response.ok) {
-                    console.error('Failed to fetch prev day data');
-                    return null;
-                }
-                
+
+                // Use TideDataService for fetching with fallback proxies
+                const response = await TideDataService.fetchTideDataForYear(year);
+                console.log(`Response from: ${response.source}`);
+
                 const csvText = await response.text();
                 console.log('CSV text length:', csvText.length);
-                
+
                 const prevDayData = parseLinzCsv(csvText, selectedDate);
                 console.log('Parsed prev day points:', prevDayData.length);
-                
+
                 if (prevDayData.length > 0) {
                     const lastPoint = prevDayData[prevDayData.length - 1];
                     console.log(`✓✓✓ SUCCESS: Prev day last point: ${lastPoint.time.toISOString()} at ${lastPoint.height}m`);
@@ -1174,7 +1357,13 @@
                     return null;
                 }
             } catch (error) {
-                console.error('✗✗✗ ERROR loading prev day data:', error);
+                // Enhanced error logging
+                if (error.type && error.userMessage) {
+                    console.error('✗✗✗ ERROR loading prev day data:', error.userMessage);
+                    console.error('Error details:', error.details);
+                } else {
+                    console.error('✗✗✗ ERROR loading prev day data:', error);
+                }
                 return null;
             }
         } // Track which date's data is currently loaded
@@ -1214,57 +1403,96 @@
 
         async function loadTideData() {
             const dateInput = document.getElementById('tideDate').value;
-            
+
             if (!dateInput) {
                 showToast('Please select a date', 'error');
                 return false;
             }
 
             const loading = document.getElementById('loading');
+            const loadingText = loading.querySelector('.loading-text');
             loading.classList.remove('hidden');
             document.getElementById('resultContainer').innerHTML = '';
 
             try {
                 const selectedDate = new Date(dateInput + 'T00:00:00');
                 const year = selectedDate.getFullYear();
-                
-                if (year < 2024 || year > 2028) {
-                    throw new Error('Tide data only available for 2024-2028');
+
+                // Validate year using service config
+                if (!TideDataService.config.availableYears.includes(year)) {
+                    throw TideDataService.createError(
+                        TideDataService.ErrorTypes.YEAR_UNAVAILABLE,
+                        `Year ${year} not available`,
+                        { year: year }
+                    );
                 }
-                
-                const csvUrl = `https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20${year}.csv`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(csvUrl)}`;
-                
-                const response = await fetch(proxyUrl);
-                if (!response.ok) throw new Error('Failed to fetch tide data');
-                
+
+                // Update loading message
+                if (loadingText) {
+                    loadingText.textContent = 'Connecting to tide data service...';
+                }
+
+                // Use TideDataService for fetching with fallback proxies
+                const response = await TideDataService.fetchTideDataForYear(year);
+                console.log(`Main data fetched from: ${response.source}`);
+
+                if (loadingText) {
+                    loadingText.textContent = 'Parsing tide data...';
+                }
+
                 const csvText = await response.text();
                 tideData = parseLinzCsv(csvText, selectedDate);
                 fullDayTideData = generateHourlyTideData(tideData, selectedDate);
-                
+
                 if (tideData.length === 0) {
-                    throw new Error('No tide data found for selected date');
+                    throw TideDataService.createError(
+                        TideDataService.ErrorTypes.NO_DATA,
+                        'No tide data found',
+                        { date: dateInput }
+                    );
                 }
-                
+
                 // Store the date we just loaded
                 lastLoadedDate = dateInput;
-                
+
+                if (loadingText) {
+                    loadingText.textContent = 'Loading adjacent day data...';
+                }
+
                 // Load adjacent day points for accurate interpolation
                 nextDayFirstPoint = await getNextDayFirstPoint(dateInput);
                 prevDayLastPoint = await getPrevDayLastPoint(dateInput);
-                
+
                 console.log('Tide data loaded for:', dateInput);
                 console.log('Tide data points:', tideData.length);
                 console.log('Hourly interpolated:', fullDayTideData.length);
-                
-                showToast('Tide data loaded successfully', 'success');
+                console.log('Data source:', response.source);
+                TideDataService.logStatus();
+
+                const sourceInfo = response.source !== 'embedded' ? ` (via ${response.source})` : '';
+                showToast(`Tide data loaded successfully${sourceInfo}`, 'success');
                 return true;
-                
+
             } catch (error) {
-                showToast(error.message, 'error');
-                console.error('Load error:', error);
+                // Enhanced error handling with user-friendly messages
+                let errorMessage;
+                if (error.type && error.userMessage) {
+                    errorMessage = error.userMessage;
+                    console.error('Load error:', error.message);
+                    console.error('Error type:', error.type);
+                    console.error('Error details:', error.details);
+                } else {
+                    errorMessage = error.message || 'An unexpected error occurred';
+                    console.error('Load error:', error);
+                }
+
+                showToast(errorMessage, 'error');
                 return false;
             } finally {
+                // Reset loading text for next time
+                if (loadingText) {
+                    loadingText.textContent = 'Loading tide data...';
+                }
                 loading.classList.add('hidden');
             }
         }
