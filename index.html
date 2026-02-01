@@ -2127,16 +2127,49 @@
             `;
         }
         
-        // Auto-add colon in time input
-        document.getElementById('preferredTime').addEventListener('input', function(e) {
-            let value = e.target.value.replace(/[^0-9]/g, ''); // Remove non-digits
-            
-            if (value.length >= 2) {
-                // Auto-insert colon after 2 digits (HH:MM)
-                value = value.slice(0, 2) + ':' + value.slice(2, 4);
+        // Auto-add colon in time input with proper backspace/delete support
+        const timeInput = document.getElementById('preferredTime');
+        let previousTimeValue = '';
+
+        timeInput.addEventListener('input', function(e) {
+            const currentValue = e.target.value;
+            const rawDigits = currentValue.replace(/[^0-9]/g, '');
+
+            // Detect if user is deleting (current value shorter than previous)
+            const isDeleting = currentValue.length < previousTimeValue.length;
+
+            if (isDeleting) {
+                // Allow deletion - just clean up non-digits but don't auto-format
+                // This lets users delete back past the colon freely
+                if (rawDigits.length <= 2) {
+                    // If 2 or fewer digits, show without colon
+                    e.target.value = rawDigits;
+                } else {
+                    // If more than 2 digits, keep the colon format
+                    e.target.value = rawDigits.slice(0, 2) + ':' + rawDigits.slice(2, 4);
+                }
+            } else {
+                // User is adding characters - auto-format with colon
+                if (rawDigits.length >= 2) {
+                    e.target.value = rawDigits.slice(0, 2) + ':' + rawDigits.slice(2, 4);
+                } else {
+                    e.target.value = rawDigits;
+                }
             }
-            
-            e.target.value = value;
+
+            previousTimeValue = e.target.value;
+        });
+
+        // Handle keyboard shortcuts for clearing
+        timeInput.addEventListener('keydown', function(e) {
+            // Ctrl+A followed by Delete/Backspace, or selecting all and typing
+            // is already handled naturally by the browser
+
+            // Escape key clears the field
+            if (e.key === 'Escape') {
+                e.target.value = '';
+                previousTimeValue = '';
+            }
         });
     </script>
 </body>
