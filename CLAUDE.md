@@ -3,9 +3,24 @@
 ## Project Overview
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
+## Current Version
+**v9.0** - Displayed on floating badge (index.html line 1091)
+
+### Version History
+| Version | Changes |
+|---------|---------|
+| v9.0 | Removed PWA manifest, CORS proxy fallbacks, time input fix |
+| v8.7 | Previous version (unknown changes) |
+
+**Important**: When making significant changes, update the version badge at line 1091:
+```html
+<div class="validation-badge">✓ v9.0</div>
+```
+
 ## Key Architecture
 - Single HTML file (`index.html`) containing all HTML, CSS, and JavaScript
 - No build system or external dependencies
+- **Normal website** (not a PWA) - address bar and navigation buttons visible
 - Fetches tide data from LINZ (Land Information New Zealand) CSV files
 - Uses CORS proxies to bypass browser restrictions
 
@@ -40,6 +55,17 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 - Added Escape key shortcut to clear the entire field
 
 **Key Code Location**: Time input event listeners at line 2130
+
+### 3. PWA Mode Hiding Browser Controls
+
+**Problem**: The web app manifest caused the site to run in PWA/standalone mode on some devices, hiding the address bar and forward/back navigation buttons.
+
+**Solution Implemented** (index.html line 37):
+- Removed the web app manifest entirely
+- Site now always runs as a normal website with full browser controls
+- Users who previously installed as PWA may need to uninstall and access via browser
+
+**Note**: Do NOT re-add a manifest with `display: standalone` or `display: fullscreen` as this will cause the same issue.
 
 ## Important Code Locations
 
