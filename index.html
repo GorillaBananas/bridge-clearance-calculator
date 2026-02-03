@@ -2376,15 +2376,17 @@
                 return;
             }
 
-            // CRITICAL: Check if date has changed and reload if needed
+            // CRITICAL: Check if date has changed or force refresh requested
             const dateInput = document.getElementById('tideDate').value;
             const dateChanged = (lastLoadedDate !== dateInput);
-            
+            const forceRefresh = document.getElementById('forceRefresh')?.checked || false;
+
             console.log('Date input:', dateInput);
             console.log('Last loaded date:', lastLoadedDate);
             console.log('Date changed?:', dateChanged);
-            
-            if (fullDayTideData.length === 0 || dateChanged) {
+            console.log('Force refresh?:', forceRefresh);
+
+            if (fullDayTideData.length === 0 || dateChanged || forceRefresh) {
                 console.log('→ Loading tide data...');
                 const success = await loadTideData();
                 if (!success) return;
@@ -2562,12 +2564,13 @@
                 return;
             }
 
-            // CRITICAL: Check if date has changed and reload if needed
+            // CRITICAL: Check if date has changed or force refresh requested
             const dateInput = document.getElementById('tideDate').value;
             const dateChanged = (lastLoadedDate !== dateInput);
-            
-            if (fullDayTideData.length === 0 || dateChanged) {
-                console.log('Loading tide data for Find Times... (date changed:', dateChanged, ')');
+            const forceRefresh = document.getElementById('forceRefresh')?.checked || false;
+
+            if (fullDayTideData.length === 0 || dateChanged || forceRefresh) {
+                console.log('Loading tide data for Find Times... (date changed:', dateChanged, ', force refresh:', forceRefresh, ')');
                 const success = await loadTideData();
                 if (!success) return;
             }
