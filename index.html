@@ -2032,11 +2032,14 @@
                 if (response.source === 'cache') {
                     const cachedData = TideDataService.getCachedData(year);
                     if (cachedData) {
-                        const daysAgo = Math.round((new Date() - new Date(cachedData.timestamp)) / (1000 * 60 * 60 * 24));
-                        sourceInfo = ` (from cache, ${daysAgo}d old)`;
+                        const cachedDate = new Date(cachedData.timestamp);
+                        const daysAgo = Math.round((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
+                        const dateStr = cachedDate.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
+                        const daysText = daysAgo === 0 ? 'today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
+                        sourceInfo = ` (cached data, pulled ${dateStr} - ${daysText})`;
                     }
                 } else {
-                    sourceInfo = ` (fresh from ${response.source})`;
+                    sourceInfo = ' (fresh data, pulled today)';
                 }
                 showToast(`Tide data loaded${sourceInfo}`, 'success');
 
