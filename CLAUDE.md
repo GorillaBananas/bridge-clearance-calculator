@@ -69,6 +69,17 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Solution**: Removed manifest entirely - site always runs as normal website.
 
+### 3. PWA Mode Hiding Browser Controls
+
+**Problem**: The web app manifest caused the site to run in PWA/standalone mode on some devices, hiding the address bar and forward/back navigation buttons.
+
+**Solution Implemented** (index.html line 37):
+- Removed the web app manifest entirely
+- Site now always runs as a normal website with full browser controls
+- Users who previously installed as PWA may need to uninstall and access via browser
+
+**Note**: Do NOT re-add a manifest with `display: standalone` or `display: fullscreen` as this will cause the same issue.
+
 ## Important Code Locations
 
 | Feature | Location |
