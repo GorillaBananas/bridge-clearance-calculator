@@ -1187,7 +1187,7 @@
             justify-content: center;
             gap: 8px;
             padding: 14px 20px;
-            margin: 0;
+            margin: 18px 0 0 0;
             cursor: pointer;
             font-size: 14px;
             font-weight: 600;
@@ -1229,7 +1229,7 @@
             -webkit-backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 24px;
-            margin: 0;
+            margin: 12px 0 0 0;
             padding: 20px 12px 14px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
@@ -2545,10 +2545,10 @@
             if (!hourlyData || hourlyData.length === 0) return '';
 
             const W = 700;
-            const H = 460;
+            const H = 480;
             const PAD_L = 58;
             const PAD_R = 20;
-            const PAD_T = 70;
+            const PAD_T = 90;
             const PAD_B = 50;
 
             const chartW = W - PAD_L - PAD_R;
@@ -2635,10 +2635,13 @@
                                    (i === tidePoints.length - 1 && pt.height > (tidePoints[i - 1]?.height || 0)) ||
                                    (i > 0 && i < tidePoints.length - 1 && pt.height > tidePoints[i - 1].height && pt.height > tidePoints[i + 1].height);
 
-                    const labelYOffset = isHigh ? -22 : 24;
+                    const labelYOffset = isHigh ? -26 : 24;
+                    // Clamp label positions so they stay within the SVG viewBox
+                    const rawLabelY = y + labelYOffset;
+                    const clampedLabelY = isHigh ? Math.max(rawLabelY, 16) : rawLabelY;
                     tideMarkers += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="white" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>`;
-                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset).toFixed(1)}" font-size="13" fill="white" text-anchor="middle" font-weight="700">${timeStr}</text>`;
-                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset + 16).toFixed(1)}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">${pt.height.toFixed(2)}m</text>`;
+                    tideMarkers += `<text x="${x.toFixed(1)}" y="${clampedLabelY.toFixed(1)}" font-size="13" fill="white" text-anchor="middle" font-weight="700">${timeStr}</text>`;
+                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(clampedLabelY + 16).toFixed(1)}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">${pt.height.toFixed(2)}m</text>`;
                 });
             }
 
