@@ -976,6 +976,66 @@
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
 
+        /* Date quick pick buttons */
+        .date-pick-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .date-pick-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .date-pick-btn.active {
+            background: rgba(142, 197, 232, 0.25);
+            border-color: var(--sky-bright);
+        }
+
+        /* Advanced section toggle */
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 0;
+            margin-top: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            user-select: none;
+        }
+
+        .advanced-toggle:hover {
+            opacity: 0.9;
+        }
+
+        .advanced-toggle-arrow {
+            transition: transform 0.2s;
+            font-size: 10px;
+        }
+
+        .advanced-toggle.open .advanced-toggle-arrow {
+            transform: rotate(90deg);
+        }
+
+        .advanced-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .advanced-content.open {
+            max-height: 200px;
+        }
+
         /* Cache status indicator */
         .cache-status {
             display: flex;
@@ -985,7 +1045,7 @@
             background: rgba(255, 255, 255, 0.08);
             border-radius: 10px;
             font-size: 12px;
-            margin-top: 12px;
+            margin-top: 8px;
         }
 
         .cache-status-icon {
@@ -1142,6 +1202,69 @@
             background: rgba(107, 207, 127, 0.3);
         }
 
+        /* Tide chart */
+        .tide-chart-card {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 24px;
+            margin: 20px 0;
+            padding: 24px 16px 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .tide-chart-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .tide-chart-svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .tide-chart-legend {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            opacity: 0.8;
+        }
+
+        .legend-swatch {
+            width: 16px;
+            height: 4px;
+            border-radius: 2px;
+        }
+
+        .legend-swatch.safe-swatch {
+            background: rgba(107, 207, 127, 0.6);
+            height: 10px;
+        }
+
+        .legend-swatch.tide-swatch {
+            background: var(--sky-bright);
+        }
+
+        .legend-swatch.clearance-swatch {
+            background: rgba(255, 217, 61, 0.8);
+            border: 1px dashed rgba(255, 217, 61, 0.8);
+            height: 1px;
+        }
+
         .hidden {
             display: none !important;
         }
@@ -1198,19 +1321,32 @@
             <div class="form-group">
                 <label class="form-label">Date</label>
                 <input type="date" id="tideDate">
+                <div class="date-quick-picks" style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="button" class="date-pick-btn active" id="todayBtn" onclick="setQuickDate(0)">Today</button>
+                    <button type="button" class="date-pick-btn" id="tomorrowBtn" onclick="setQuickDate(1)">Tomorrow</button>
+                </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Time</label>
-                <input type="text" id="preferredTime" placeholder="e.g. 1430" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="preferredTime" placeholder="e.g. 14:30" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" style="flex: 1;">
+                    <button type="button" id="nowBtn" onclick="fillCurrentTime()" style="padding: 16px 20px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.25); border-radius: 16px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; transition: all 0.2s;">Now</button>
+                </div>
             </div>
-            <div class="checkbox-group" onclick="if(event.target === this) document.getElementById('forceRefresh').checked = !document.getElementById('forceRefresh').checked">
-                <input type="checkbox" id="forceRefresh">
-                <label for="forceRefresh">Force refresh tide data</label>
+            <div class="advanced-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
+                <span class="advanced-toggle-arrow">&#9654;</span>
+                <span>Advanced options</span>
             </div>
-            <p class="checkbox-hint">Fetches fresh data from LINZ (slower than using cached data)</p>
-            <div id="cacheStatus" class="cache-status hidden">
-                <span class="cache-status-icon">📦</span>
-                <span class="cache-status-text">Checking data status...</span>
+            <div class="advanced-content">
+                <div class="checkbox-group" onclick="if(event.target === this) document.getElementById('forceRefresh').checked = !document.getElementById('forceRefresh').checked">
+                    <input type="checkbox" id="forceRefresh">
+                    <label for="forceRefresh">Force refresh tide data</label>
+                </div>
+                <p class="checkbox-hint">Fetches fresh data from LINZ (slower than using cached data)</p>
+                <div id="cacheStatus" class="cache-status hidden">
+                    <span class="cache-status-icon">📦</span>
+                    <span class="cache-status-text">Checking data status...</span>
+                </div>
             </div>
         </div>
 
@@ -1225,7 +1361,7 @@
                     <input type="number" id="boatHeight" step="0.1" placeholder="4.5">
                     <span class="input-unit">m</span>
                 </div>
-                <p class="input-hint">To highest point (mast, antenna, etc.) when unladen</p>
+                <p class="input-hint">To highest point (mast, antenna, etc.) when unladen. Value is remembered for next visit.</p>
             </div>
             <div class="form-group">
                 <label class="form-label">Safety Margin</label>
@@ -1273,7 +1409,7 @@
         </div>
     </div>
 
-    <div class="validation-badge">✓ v9.1</div>
+    <div class="validation-badge">✓ v9.2</div>
 
     <script>
         let selectedSpanClearance = 6.2;
@@ -1790,11 +1926,63 @@
         const day = String(nzDate.getDate()).padStart(2, '0');
         document.getElementById('tideDate').value = `${year}-${month}-${day}`;
 
+        // Set date to today+offset and highlight the active quick pick button
+        function setQuickDate(offsetDays) {
+            const nz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+            nz.setDate(nz.getDate() + offsetDays);
+            const y = nz.getFullYear();
+            const m = String(nz.getMonth() + 1).padStart(2, '0');
+            const d = String(nz.getDate()).padStart(2, '0');
+            document.getElementById('tideDate').value = `${y}-${m}-${d}`;
+            updateCacheStatus();
+            // Highlight the correct button
+            document.getElementById('todayBtn').classList.toggle('active', offsetDays === 0);
+            document.getElementById('tomorrowBtn').classList.toggle('active', offsetDays === 1);
+        }
+
+        // Fill current NZ time into the time input
+        function fillCurrentTime() {
+            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const timeInput = document.getElementById('preferredTime');
+            timeInput.value = h + ':' + m;
+            previousTimeValue = timeInput.value;
+        }
+
+        // Restore saved boat height and safety margin from localStorage
+        (function restoreSavedInputs() {
+            try {
+                const savedBoatHeight = localStorage.getItem('boatHeight');
+                const savedSafetyMargin = localStorage.getItem('safetyMargin');
+                if (savedBoatHeight) document.getElementById('boatHeight').value = savedBoatHeight;
+                if (savedSafetyMargin) document.getElementById('safetyMargin').value = savedSafetyMargin;
+            } catch (e) { /* localStorage unavailable */ }
+        })();
+
+        // Save boat height and safety margin on change
+        document.getElementById('boatHeight').addEventListener('change', function() {
+            try { localStorage.setItem('boatHeight', this.value); } catch (e) {}
+        });
+        document.getElementById('safetyMargin').addEventListener('change', function() {
+            try { localStorage.setItem('safetyMargin', this.value); } catch (e) {}
+        });
+
         // Initialize cache status on page load
         updateCacheStatus();
 
-        // Update cache status when date changes
-        document.getElementById('tideDate').addEventListener('change', updateCacheStatus);
+        // Update cache status when date changes and sync quick-pick buttons
+        document.getElementById('tideDate').addEventListener('change', function() {
+            updateCacheStatus();
+            // Check if the selected date matches today or tomorrow
+            const val = this.value;
+            const nzNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+            const todayStr = `${nzNow.getFullYear()}-${String(nzNow.getMonth()+1).padStart(2,'0')}-${String(nzNow.getDate()).padStart(2,'0')}`;
+            const tmrw = new Date(nzNow); tmrw.setDate(tmrw.getDate()+1);
+            const tmrwStr = `${tmrw.getFullYear()}-${String(tmrw.getMonth()+1).padStart(2,'0')}-${String(tmrw.getDate()).padStart(2,'0')}`;
+            document.getElementById('todayBtn').classList.toggle('active', val === todayStr);
+            document.getElementById('tomorrowBtn').classList.toggle('active', val === tmrwStr);
+        });
 
         function selectSpan(spanType, clearance) {
             selectedSpanClearance = clearance;
@@ -2353,6 +2541,199 @@
             };
         }
 
+        // ============================================================
+        // TIDE CYCLE CHART
+        // ============================================================
+        function renderTideChart(tidePoints, hourlyData, spanClearance, boatHeight, safetyMargin, safeWindows, requestedTime) {
+            if (!hourlyData || hourlyData.length === 0) return '';
+
+            const W = 380; // SVG viewBox width
+            const H = 200; // SVG viewBox height
+            const PAD_L = 36; // left padding for y-axis labels
+            const PAD_R = 10;
+            const PAD_T = 20;
+            const PAD_B = 32; // bottom for x-axis labels
+
+            const chartW = W - PAD_L - PAD_R;
+            const chartH = H - PAD_T - PAD_B;
+
+            // Determine data range
+            const allHeights = hourlyData.map(d => d.height);
+            const minH = Math.min(0, Math.floor(Math.min(...allHeights) * 10) / 10);
+            const maxH = Math.max(spanClearance + 0.5, Math.ceil(Math.max(...allHeights) * 10) / 10);
+            const hRange = maxH - minH || 1;
+
+            // Helper: map hour (0-24) to x
+            function timeToX(date) {
+                const h = date.getHours() + date.getMinutes() / 60;
+                return PAD_L + (h / 24) * chartW;
+            }
+            // Helper: map height to y (inverted - higher values at top)
+            function heightToY(ht) {
+                return PAD_T + chartH - ((ht - minH) / hRange) * chartH;
+            }
+
+            // Build tide curve path
+            let curvePath = '';
+            hourlyData.forEach((pt, i) => {
+                const x = timeToX(pt.time);
+                const y = heightToY(pt.height);
+                curvePath += (i === 0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)} `;
+            });
+
+            // Build filled area under curve
+            const firstX = timeToX(hourlyData[0].time);
+            const lastX = timeToX(hourlyData[hourlyData.length - 1].time);
+            const bottomY = heightToY(minH);
+            const fillPath = curvePath + `L${lastX.toFixed(1)},${bottomY.toFixed(1)} L${firstX.toFixed(1)},${bottomY.toFixed(1)} Z`;
+
+            // Safe window rectangles
+            const clearanceNeeded = boatHeight + safetyMargin;
+            // The max tide height that still allows passage
+            const maxSafeTide = spanClearance - clearanceNeeded;
+            let safeRects = '';
+
+            if (safeWindows && safeWindows.length > 0) {
+                safeWindows.forEach(win => {
+                    const x1 = timeToX(win.start.time);
+                    const x2 = timeToX(win.end.time);
+                    const rw = Math.max(x2 - x1, 2);
+                    safeRects += `<rect x="${x1.toFixed(1)}" y="${PAD_T}" width="${rw.toFixed(1)}" height="${chartH}" fill="rgba(107,207,127,0.15)" rx="3"/>`;
+                    // Window start/end labels at top
+                    const startStr = win.start.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const endStr = win.end.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    safeRects += `<text x="${x1.toFixed(1)}" y="${PAD_T - 4}" font-size="8" fill="rgba(107,207,127,0.9)" text-anchor="start">${startStr}</text>`;
+                    safeRects += `<text x="${(x1 + rw).toFixed(1)}" y="${PAD_T - 4}" font-size="8" fill="rgba(107,207,127,0.9)" text-anchor="end">${endStr}</text>`;
+                });
+            }
+
+            // Max safe tide line (dashed)
+            const safeLineY = heightToY(maxSafeTide);
+            let safeLine = '';
+            if (maxSafeTide > minH && maxSafeTide < maxH) {
+                safeLine = `<line x1="${PAD_L}" y1="${safeLineY.toFixed(1)}" x2="${W - PAD_R}" y2="${safeLineY.toFixed(1)}" stroke="rgba(255,217,61,0.7)" stroke-width="1" stroke-dasharray="4,3"/>`;
+                safeLine += `<text x="${W - PAD_R}" y="${safeLineY.toFixed(1) - 4}" font-size="8" fill="rgba(255,217,61,0.8)" text-anchor="end">max safe tide ${maxSafeTide.toFixed(1)}m</text>`;
+            }
+
+            // High/low tide markers
+            let tideMarkers = '';
+            if (tidePoints && tidePoints.length > 0) {
+                // Find local highs and lows from the actual LINZ data points
+                tidePoints.forEach((pt, i) => {
+                    const x = timeToX(pt.time);
+                    const y = heightToY(pt.height);
+                    const timeStr = pt.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const isHigh = (i === 0 && pt.height > (tidePoints[1]?.height || 0)) ||
+                                   (i === tidePoints.length - 1 && pt.height > (tidePoints[i - 1]?.height || 0)) ||
+                                   (i > 0 && i < tidePoints.length - 1 && pt.height > tidePoints[i - 1].height && pt.height > tidePoints[i + 1].height);
+
+                    const labelYOffset = isHigh ? -10 : 14;
+                    tideMarkers += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="white" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>`;
+                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset).toFixed(1)}" font-size="9" fill="white" text-anchor="middle" font-weight="600">${timeStr}</text>`;
+                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset + 10).toFixed(1)}" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">${pt.height.toFixed(2)}m</text>`;
+                });
+            }
+
+            // Requested time marker
+            let timeMarker = '';
+            if (requestedTime) {
+                const tx = timeToX(requestedTime);
+                timeMarker = `<line x1="${tx.toFixed(1)}" y1="${PAD_T}" x2="${tx.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,107,107,0.7)" stroke-width="1.5" stroke-dasharray="3,2"/>`;
+                const tStr = requestedTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+                timeMarker += `<text x="${tx.toFixed(1)}" y="${PAD_T + chartH + 10}" font-size="8" fill="rgba(255,107,107,0.9)" text-anchor="middle" font-weight="600">${tStr}</text>`;
+            }
+
+            // X-axis labels (every 3 hours)
+            let xLabels = '';
+            for (let h = 0; h <= 24; h += 3) {
+                const x = PAD_L + (h / 24) * chartW;
+                const label = h === 24 ? '00' : String(h).padStart(2, '0');
+                xLabels += `<text x="${x.toFixed(1)}" y="${H - 6}" font-size="9" fill="rgba(255,255,255,0.5)" text-anchor="middle">${label}:00</text>`;
+                xLabels += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>`;
+            }
+
+            // Y-axis labels
+            let yLabels = '';
+            const yStep = hRange > 3 ? 1 : 0.5;
+            for (let ht = Math.ceil(minH / yStep) * yStep; ht <= maxH; ht += yStep) {
+                const y = heightToY(ht);
+                yLabels += `<text x="${PAD_L - 4}" y="${(y + 3).toFixed(1)}" font-size="8" fill="rgba(255,255,255,0.4)" text-anchor="end">${ht.toFixed(1)}</text>`;
+                yLabels += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W - PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>`;
+            }
+
+            const svg = `
+            <div class="tide-chart-card">
+                <div class="tide-chart-title">Tide Cycle &amp; Safe Windows</div>
+                <svg class="tide-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+                    <!-- Grid -->
+                    ${xLabels}
+                    ${yLabels}
+                    <!-- Chart border -->
+                    <rect x="${PAD_L}" y="${PAD_T}" width="${chartW}" height="${chartH}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" rx="2"/>
+                    <!-- Safe windows -->
+                    ${safeRects}
+                    <!-- Safe tide limit -->
+                    ${safeLine}
+                    <!-- Tide curve fill -->
+                    <path d="${fillPath}" fill="rgba(91,163,208,0.15)"/>
+                    <!-- Tide curve -->
+                    <path d="${curvePath}" fill="none" stroke="var(--sky-bright)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <!-- Tide point markers -->
+                    ${tideMarkers}
+                    <!-- Requested time -->
+                    ${timeMarker}
+                </svg>
+                <div class="tide-chart-legend">
+                    <div class="legend-item"><div class="legend-swatch tide-swatch"></div><span>Tide height</span></div>
+                    <div class="legend-item"><div class="legend-swatch safe-swatch"></div><span>Safe window</span></div>
+                    <div class="legend-item"><div class="legend-swatch clearance-swatch"></div><span>Max safe tide</span></div>
+                </div>
+            </div>`;
+
+            return svg;
+        }
+
+        // Calculate safe windows for chart display (shared between Check Now and Find Times)
+        function calculateSafeWindows(hourlyData, spanClearance, boatHeight, safetyMargin) {
+            const clearanceNeeded = boatHeight + safetyMargin;
+            const safePoints = [];
+
+            for (let tide of hourlyData) {
+                const actualClearance = spanClearance - tide.height;
+                const spare = actualClearance - clearanceNeeded;
+                if (spare >= 0) {
+                    safePoints.push({
+                        time: tide.time,
+                        tideHeight: tide.height,
+                        actualClearance: actualClearance,
+                        spareClearance: spare
+                    });
+                }
+            }
+
+            const windows = [];
+            let current = null;
+
+            for (let i = 0; i < safePoints.length; i++) {
+                const safe = safePoints[i];
+                if (!current) {
+                    current = { start: safe, end: safe, minClearance: safe.spareClearance, maxClearance: safe.spareClearance };
+                } else {
+                    const hoursDiff = (safe.time - current.end.time) / (1000 * 60 * 60);
+                    if (hoursDiff <= 1.5) {
+                        current.end = safe;
+                        current.minClearance = Math.min(current.minClearance, safe.spareClearance);
+                        current.maxClearance = Math.max(current.maxClearance, safe.spareClearance);
+                    } else {
+                        windows.push(current);
+                        current = { start: safe, end: safe, minClearance: safe.spareClearance, maxClearance: safe.spareClearance };
+                    }
+                }
+            }
+            if (current) windows.push(current);
+            return windows;
+        }
+
         async function checkClearance() {
             const calculationId = Date.now(); // Unique ID for this calculation
             
@@ -2549,6 +2930,7 @@
                         </div>
                     </div>
                 </div>
+                ${renderTideChart(tideData, fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin, calculateSafeWindows(fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin), requestedTime)}
             `;
         }
 
@@ -2624,10 +3006,21 @@
             }
             
             if (currentWindow) windows.push(currentWindow);
-            displayBestTimes(windows, clearanceNeeded);
+            // Get requested time (if entered) for chart marker
+            const preferredTime = document.getElementById('preferredTime').value;
+            let reqTime = null;
+            if (preferredTime && preferredTime.includes(':')) {
+                const [rh, rm] = preferredTime.split(':').map(Number);
+                if (!isNaN(rh) && !isNaN(rm)) {
+                    const sd = new Date(dateInput + 'T00:00:00');
+                    reqTime = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate(), rh, rm, 0);
+                }
+            }
+
+            displayBestTimes(windows, clearanceNeeded, boatHeight, safetyMargin, reqTime);
         }
 
-        function displayBestTimes(windows, clearanceNeeded) {
+        function displayBestTimes(windows, clearanceNeeded, boatHeight, safetyMargin, requestedTime) {
             const container = document.getElementById('resultContainer');
             
             if (windows.length === 0) {
@@ -2712,6 +3105,7 @@
                         </p>
                     </div>
                 </div>
+                ${renderTideChart(tideData, fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin, windows, requestedTime)}
             `;
         }
         
