@@ -976,29 +976,6 @@
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
         }
 
-        /* Date quick pick buttons */
-        .date-pick-btn {
-            padding: 8px 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            color: white;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-            transition: all 0.2s;
-        }
-
-        .date-pick-btn:hover {
-            background: rgba(255, 255, 255, 0.18);
-        }
-
-        .date-pick-btn.active {
-            background: rgba(142, 197, 232, 0.25);
-            border-color: var(--sky-bright);
-        }
-
         /* Advanced section toggle */
         .advanced-toggle {
             display: flex;
@@ -1242,7 +1219,7 @@
         }
 
         .tide-chart-collapse.open {
-            max-height: 800px;
+            max-height: 1200px;
         }
 
         .tide-chart-card {
@@ -1354,10 +1331,9 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Date</label>
-                <input type="date" id="tideDate">
-                <div class="date-quick-picks" style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button type="button" class="date-pick-btn active" id="todayBtn" onclick="setQuickDate(0)">Today</button>
-                    <button type="button" class="date-pick-btn" id="tomorrowBtn" onclick="setQuickDate(1)">Tomorrow</button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="date" id="tideDate" style="flex: 1;">
+                    <button type="button" id="todayBtn" onclick="setQuickDate()" style="padding: 16px 20px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.25); border-radius: 16px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; transition: all 0.2s;">Today</button>
                 </div>
             </div>
             <div class="form-group">
@@ -1369,7 +1345,7 @@
             </div>
             <div class="advanced-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
                 <span class="advanced-toggle-arrow">&#9654;</span>
-                <span>Advanced options</span>
+                <span>Advanced tide data options</span>
             </div>
             <div class="advanced-content">
                 <div class="checkbox-group" onclick="if(event.target === this) document.getElementById('forceRefresh').checked = !document.getElementById('forceRefresh').checked">
@@ -1960,18 +1936,14 @@
         const day = String(nzDate.getDate()).padStart(2, '0');
         document.getElementById('tideDate').value = `${year}-${month}-${day}`;
 
-        // Set date to today+offset and highlight the active quick pick button
-        function setQuickDate(offsetDays) {
+        // Set date to today (NZ time)
+        function setQuickDate() {
             const nz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-            nz.setDate(nz.getDate() + offsetDays);
             const y = nz.getFullYear();
             const m = String(nz.getMonth() + 1).padStart(2, '0');
             const d = String(nz.getDate()).padStart(2, '0');
             document.getElementById('tideDate').value = `${y}-${m}-${d}`;
             updateCacheStatus();
-            // Highlight the correct button
-            document.getElementById('todayBtn').classList.toggle('active', offsetDays === 0);
-            document.getElementById('tomorrowBtn').classList.toggle('active', offsetDays === 1);
         }
 
         // Fill current NZ time into the time input
@@ -2005,18 +1977,8 @@
         // Initialize cache status on page load
         updateCacheStatus();
 
-        // Update cache status when date changes and sync quick-pick buttons
-        document.getElementById('tideDate').addEventListener('change', function() {
-            updateCacheStatus();
-            // Check if the selected date matches today or tomorrow
-            const val = this.value;
-            const nzNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-            const todayStr = `${nzNow.getFullYear()}-${String(nzNow.getMonth()+1).padStart(2,'0')}-${String(nzNow.getDate()).padStart(2,'0')}`;
-            const tmrw = new Date(nzNow); tmrw.setDate(tmrw.getDate()+1);
-            const tmrwStr = `${tmrw.getFullYear()}-${String(tmrw.getMonth()+1).padStart(2,'0')}-${String(tmrw.getDate()).padStart(2,'0')}`;
-            document.getElementById('todayBtn').classList.toggle('active', val === todayStr);
-            document.getElementById('tomorrowBtn').classList.toggle('active', val === tmrwStr);
-        });
+        // Update cache status when date changes
+        document.getElementById('tideDate').addEventListener('change', updateCacheStatus);
 
         function selectSpan(spanType, clearance) {
             selectedSpanClearance = clearance;
@@ -2581,42 +2543,44 @@
         function renderTideChart(tidePoints, hourlyData, spanClearance, boatHeight, safetyMargin, safeWindows, requestedTime) {
             if (!hourlyData || hourlyData.length === 0) return '';
 
-            const W = 520; // wider SVG viewBox
-            const H = 300; // taller SVG viewBox
-            const PAD_L = 48; // left padding for y-axis labels
-            const PAD_R = 16;
-            const PAD_T = 32; // top padding for safe-window time labels
-            const PAD_B = 40; // bottom for x-axis labels
+            const W = 700;
+            const H = 420;
+            const PAD_L = 58;
+            const PAD_R = 20;
+            const PAD_T = 44;
+            const PAD_B = 50;
 
             const chartW = W - PAD_L - PAD_R;
             const chartH = H - PAD_T - PAD_B;
 
-            // Determine data range — only go up to tide max + some headroom, not bridge height
+            // Y-axis: tight range around actual tide data with comfortable padding
             const allHeights = hourlyData.map(d => d.height);
+            const dataMin = Math.min(...allHeights);
             const dataMax = Math.max(...allHeights);
-            const minH = Math.min(0, Math.floor(Math.min(...allHeights) * 10) / 10);
-            const maxH = Math.ceil((dataMax + 0.5) * 10) / 10;
+            const clearanceNeeded = boatHeight + safetyMargin;
+            const maxSafeTide = spanClearance - clearanceNeeded;
+            // Include the safe-tide line in the range if it's close to the data
+            const rangeMin = Math.min(dataMin, maxSafeTide > -1 ? maxSafeTide : dataMin);
+            const rangeMax = Math.max(dataMax, maxSafeTide);
+            const rangePad = (rangeMax - rangeMin) * 0.18;
+            const minH = Math.floor((rangeMin - rangePad) * 10) / 10;
+            const maxH = Math.ceil((rangeMax + rangePad) * 10) / 10;
             const hRange = maxH - minH || 1;
 
-            // Helper: map hour (0-24) to x
             function timeToX(date) {
                 const h = date.getHours() + date.getMinutes() / 60;
                 return PAD_L + (h / 24) * chartW;
             }
-            // Helper: map height to y (inverted - higher values at top)
             function heightToY(ht) {
                 return PAD_T + chartH - ((ht - minH) / hRange) * chartH;
             }
 
-            // Build smooth tide curve using cardinal spline
+            // Cardinal spline for smooth curve
             function cardinalSpline(points, tension) {
                 tension = tension || 0.4;
                 if (points.length < 2) return '';
                 let d = `M${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
-                if (points.length === 2) {
-                    d += ` L${points[1][0].toFixed(1)},${points[1][1].toFixed(1)}`;
-                    return d;
-                }
+                if (points.length === 2) return d + ` L${points[1][0].toFixed(1)},${points[1][1].toFixed(1)}`;
                 for (let i = 0; i < points.length - 1; i++) {
                     const p0 = points[Math.max(0, i - 1)];
                     const p1 = points[i];
@@ -2633,48 +2597,44 @@
 
             const curvePoints = hourlyData.map(pt => [timeToX(pt.time), heightToY(pt.height)]);
             const curvePath = cardinalSpline(curvePoints);
-
-            // Build filled area under curve
             const firstX = curvePoints[0][0];
             const lastX = curvePoints[curvePoints.length - 1][0];
             const bottomY = heightToY(minH);
             const fillPath = curvePath + ` L${lastX.toFixed(1)},${bottomY.toFixed(1)} L${firstX.toFixed(1)},${bottomY.toFixed(1)} Z`;
 
-            // Safe window rectangles
-            const clearanceNeeded = boatHeight + safetyMargin;
-            const maxSafeTide = spanClearance - clearanceNeeded;
+            // Safe window regions — labels placed INSIDE the shaded area at bottom
             let safeRects = '';
-
             if (safeWindows && safeWindows.length > 0) {
                 safeWindows.forEach(win => {
                     const x1 = timeToX(win.start.time);
                     const x2 = timeToX(win.end.time);
-                    const rw = Math.max(x2 - x1, 3);
-                    safeRects += `<rect x="${x1.toFixed(1)}" y="${PAD_T}" width="${rw.toFixed(1)}" height="${chartH}" fill="rgba(107,207,127,0.12)" rx="4"/>`;
-                    safeRects += `<line x1="${x1.toFixed(1)}" y1="${PAD_T}" x2="${x1.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(107,207,127,0.4)" stroke-width="1" stroke-dasharray="3,3"/>`;
-                    safeRects += `<line x1="${(x1 + rw).toFixed(1)}" y1="${PAD_T}" x2="${(x1 + rw).toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(107,207,127,0.4)" stroke-width="1" stroke-dasharray="3,3"/>`;
-                    // Window start/end labels at top
+                    const rw = Math.max(x2 - x1, 4);
+                    safeRects += `<rect x="${x1.toFixed(1)}" y="${PAD_T}" width="${rw.toFixed(1)}" height="${chartH}" fill="rgba(107,207,127,0.10)" rx="4"/>`;
+                    safeRects += `<line x1="${x1.toFixed(1)}" y1="${PAD_T}" x2="${x1.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(107,207,127,0.35)" stroke-width="1" stroke-dasharray="4,4"/>`;
+                    safeRects += `<line x1="${(x1 + rw).toFixed(1)}" y1="${PAD_T}" x2="${(x1 + rw).toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(107,207,127,0.35)" stroke-width="1" stroke-dasharray="4,4"/>`;
                     const startStr = win.start.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
                     const endStr = win.end.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
                     const mid = x1 + rw / 2;
-                    if (rw > 40) {
-                        safeRects += `<text x="${(x1 + 3).toFixed(1)}" y="${PAD_T - 6}" font-size="10" fill="rgba(107,207,127,0.95)" text-anchor="start" font-weight="600">${startStr}</text>`;
-                        safeRects += `<text x="${(x1 + rw - 3).toFixed(1)}" y="${PAD_T - 6}" font-size="10" fill="rgba(107,207,127,0.95)" text-anchor="end" font-weight="600">${endStr}</text>`;
+                    // Place window labels at the bottom of the chart area to avoid overlapping tide markers
+                    const labelY = PAD_T + chartH - 8;
+                    if (rw > 70) {
+                        safeRects += `<text x="${(x1 + 6).toFixed(1)}" y="${labelY}" font-size="11" fill="rgba(107,207,127,0.9)" text-anchor="start" font-weight="600">${startStr}</text>`;
+                        safeRects += `<text x="${(x1 + rw - 6).toFixed(1)}" y="${labelY}" font-size="11" fill="rgba(107,207,127,0.9)" text-anchor="end" font-weight="600">${endStr}</text>`;
                     } else {
-                        safeRects += `<text x="${mid.toFixed(1)}" y="${PAD_T - 6}" font-size="10" fill="rgba(107,207,127,0.95)" text-anchor="middle" font-weight="600">${startStr}-${endStr}</text>`;
+                        safeRects += `<text x="${mid.toFixed(1)}" y="${labelY}" font-size="10" fill="rgba(107,207,127,0.9)" text-anchor="middle" font-weight="600">${startStr} - ${endStr}</text>`;
                     }
                 });
             }
 
-            // Max safe tide line (dashed)
+            // Max safe tide line
             const safeLineY = heightToY(maxSafeTide);
             let safeLine = '';
             if (maxSafeTide > minH && maxSafeTide < maxH) {
-                safeLine = `<line x1="${PAD_L}" y1="${safeLineY.toFixed(1)}" x2="${W - PAD_R}" y2="${safeLineY.toFixed(1)}" stroke="rgba(255,217,61,0.6)" stroke-width="1" stroke-dasharray="6,4"/>`;
-                safeLine += `<text x="${W - PAD_R - 2}" y="${(safeLineY - 6).toFixed(1)}" font-size="10" fill="rgba(255,217,61,0.85)" text-anchor="end" font-weight="600">max safe tide ${maxSafeTide.toFixed(1)}m</text>`;
+                safeLine = `<line x1="${PAD_L}" y1="${safeLineY.toFixed(1)}" x2="${W - PAD_R}" y2="${safeLineY.toFixed(1)}" stroke="rgba(255,217,61,0.55)" stroke-width="1" stroke-dasharray="6,4"/>`;
+                safeLine += `<text x="${PAD_L + 4}" y="${(safeLineY - 6).toFixed(1)}" font-size="10" fill="rgba(255,217,61,0.8)" text-anchor="start" font-weight="600">max safe tide ${maxSafeTide.toFixed(1)}m</text>`;
             }
 
-            // High/low tide markers
+            // Tide point markers — labels placed away from curve with more offset
             let tideMarkers = '';
             if (tidePoints && tidePoints.length > 0) {
                 tidePoints.forEach((pt, i) => {
@@ -2685,10 +2645,10 @@
                                    (i === tidePoints.length - 1 && pt.height > (tidePoints[i - 1]?.height || 0)) ||
                                    (i > 0 && i < tidePoints.length - 1 && pt.height > tidePoints[i - 1].height && pt.height > tidePoints[i + 1].height);
 
-                    const labelYOffset = isHigh ? -14 : 18;
-                    tideMarkers += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="white" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>`;
-                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset).toFixed(1)}" font-size="11" fill="white" text-anchor="middle" font-weight="700">${timeStr}</text>`;
-                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset + 13).toFixed(1)}" font-size="10" fill="rgba(255,255,255,0.75)" text-anchor="middle">${pt.height.toFixed(2)}m</text>`;
+                    const labelYOffset = isHigh ? -18 : 22;
+                    tideMarkers += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="white" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>`;
+                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset).toFixed(1)}" font-size="13" fill="white" text-anchor="middle" font-weight="700">${timeStr}</text>`;
+                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(y + labelYOffset + 15).toFixed(1)}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">${pt.height.toFixed(2)}m</text>`;
                 });
             }
 
@@ -2696,27 +2656,27 @@
             let timeMarker = '';
             if (requestedTime) {
                 const tx = timeToX(requestedTime);
-                timeMarker = `<line x1="${tx.toFixed(1)}" y1="${PAD_T}" x2="${tx.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,107,107,0.7)" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+                timeMarker = `<line x1="${tx.toFixed(1)}" y1="${PAD_T}" x2="${tx.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,107,107,0.7)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
                 const tStr = requestedTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
-                timeMarker += `<text x="${tx.toFixed(1)}" y="${PAD_T + chartH + 14}" font-size="10" fill="rgba(255,107,107,0.95)" text-anchor="middle" font-weight="700">${tStr}</text>`;
+                timeMarker += `<text x="${tx.toFixed(1)}" y="${PAD_T + chartH + 18}" font-size="11" fill="rgba(255,107,107,0.95)" text-anchor="middle" font-weight="700">${tStr}</text>`;
             }
 
-            // X-axis labels (every 3 hours)
+            // X-axis labels every 3 hours
             let xLabels = '';
             for (let h = 0; h <= 24; h += 3) {
                 const x = PAD_L + (h / 24) * chartW;
                 const label = h === 24 ? '00' : String(h).padStart(2, '0');
-                xLabels += `<text x="${x.toFixed(1)}" y="${H - 10}" font-size="11" fill="rgba(255,255,255,0.55)" text-anchor="middle">${label}:00</text>`;
-                xLabels += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>`;
+                xLabels += `<text x="${x.toFixed(1)}" y="${H - 14}" font-size="12" fill="rgba(255,255,255,0.5)" text-anchor="middle">${label}:00</text>`;
+                xLabels += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>`;
             }
 
             // Y-axis labels
             let yLabels = '';
-            const yStep = hRange > 3 ? 1 : 0.5;
+            const yStep = hRange > 4 ? 1 : 0.5;
             for (let ht = Math.ceil(minH / yStep) * yStep; ht <= maxH; ht += yStep) {
                 const y = heightToY(ht);
-                yLabels += `<text x="${PAD_L - 6}" y="${(y + 4).toFixed(1)}" font-size="10" fill="rgba(255,255,255,0.45)" text-anchor="end">${ht.toFixed(1)}m</text>`;
-                yLabels += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W - PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>`;
+                yLabels += `<text x="${PAD_L - 8}" y="${(y + 4).toFixed(1)}" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">${ht.toFixed(1)}m</text>`;
+                yLabels += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W - PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>`;
             }
 
             const chartId = 'tideChart_' + Date.now();
@@ -2729,22 +2689,14 @@
             <div id="${chartId}" class="tide-chart-collapse">
                 <div class="tide-chart-card">
                     <svg class="tide-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-                        <!-- Grid -->
                         ${xLabels}
                         ${yLabels}
-                        <!-- Chart border -->
-                        <rect x="${PAD_L}" y="${PAD_T}" width="${chartW}" height="${chartH}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" rx="3"/>
-                        <!-- Safe windows -->
+                        <rect x="${PAD_L}" y="${PAD_T}" width="${chartW}" height="${chartH}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" rx="3"/>
                         ${safeRects}
-                        <!-- Safe tide limit -->
                         ${safeLine}
-                        <!-- Tide curve fill -->
-                        <path d="${fillPath}" fill="rgba(91,163,208,0.12)"/>
-                        <!-- Tide curve -->
+                        <path d="${fillPath}" fill="rgba(91,163,208,0.10)"/>
                         <path d="${curvePath}" fill="none" stroke="var(--sky-bright)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        <!-- Tide point markers -->
                         ${tideMarkers}
-                        <!-- Requested time -->
                         ${timeMarker}
                     </svg>
                     <div class="tide-chart-legend">
