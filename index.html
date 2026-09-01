@@ -2281,7 +2281,6 @@
 
             try {
                 tideData = parseLinzCsv(cached.csvText, selectedDate);
-                fullDayTideData = generateHourlyTideData(tideData, selectedDate);
 
                 if (tideData.length === 0) {
                     showToast('Cached data appears to be invalid', 'error');
@@ -2308,6 +2307,13 @@
                     const prevDayData = parseLinzCsv(prevYearCached.csvText, prevDate);
                     prevDayLastPoint = prevDayData.length > 0 ? prevDayData[prevDayData.length - 1] : null;
                 }
+
+                // Same ordering as loadTideData: the series is built only once the
+                // adjacent-day anchors are known, and includes them
+                fullDayTideData = generateHourlyTideData(
+                    buildInterpolationPoints(tideData, prevDayLastPoint, nextDayFirstPoint),
+                    selectedDate
+                );
 
                 const cachedDate = new Date(cached.timestamp);
                 const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));

@@ -62,7 +62,8 @@ const FUNCTIONS = [
     'ruleOfTwelfthsHeight',
     'buildInterpolationPoints',
     'findBracketingPoints',
-    'generateHourlyTideData'
+    'generateHourlyTideData',
+    'interpolateTideHeight'
 ];
 
 // ------------------------------------------------------------------ sandbox
@@ -88,8 +89,11 @@ const quietConsole = {
     log: () => {}, warn: () => {}, error: () => {}, info: () => {}
 };
 
-const source = FUNCTIONS.map(extractFunction).join('\n\n') + '\n\n' + extractService() +
-    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService };';
+// interpolateTideHeight reads these module-level globals in the app
+const source = 'let nextDayFirstPoint = null, prevDayLastPoint = null;\n' +
+    FUNCTIONS.map(extractFunction).join('\n\n') + '\n\n' + extractService() +
+    '\nfunction setAdjacent(prev, next) { prevDayLastPoint = prev; nextDayFirstPoint = next; }' +
+    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent };';
 
 const api = new Function('localStorage', 'fetch', 'console', 'AbortController', source)(
     localStorageStub, fetchStub, quietConsole, AbortController
@@ -97,7 +101,8 @@ const api = new Function('localStorage', 'fetch', 'console', 'AbortController', 
 
 const {
     isLinzDataRow, parseLinzCsv, ruleOfTwelfthsHeight, buildInterpolationPoints,
-    generateHourlyTideData, getNZTimezoneOffset, TideDataService
+    generateHourlyTideData, getNZTimezoneOffset, interpolateTideHeight,
+    TideDataService, setAdjacent
 } = api;
 
 // -------------------------------------------------------------------- runner
@@ -265,18 +270,68 @@ async function main() {
         }
     });
 
-    await test('the 10-minute series agrees with the Check Now interpolation', () => {
-        const points = parseLinzCsv(BUNDLED_CSV, new Date(2026, 5, 10));
-        const series = generateHourlyTideData(points, new Date(2026, 5, 10));
-        let compared = 0;
-        series.forEach(sample => {
-            const bracket = api.findBracketingPoints(points, sample.time);
-            if (!bracket) return;
-            const direct = ruleOfTwelfthsHeight(bracket.before, bracket.after, sample.time);
-            assert.ok(Math.abs(direct - sample.height) < 1e-9);
-            compared++;
+    await test('falling tides use the same curve as rising tides, mirrored', () => {
+        const t0 = new Date(2026, 0, 1, 0, 0);
+        const t1 = new Date(2026, 0, 1, 6, 0);
+        const rising = ruleOfTwelfthsHeight({ time: t0, height: 0 }, { time: t1, height: 12 },
+            new Date(2026, 0, 1, 2, 0));
+        const falling = ruleOfTwelfthsHeight({ time: t0, height: 12 }, { time: t1, height: 0 },
+            new Date(2026, 0, 1, 2, 0));
+        assert.ok(Math.abs(rising - 3) < 1e-9, 'two hours in is 3/12 of range');
+        assert.ok(Math.abs(falling - 9) < 1e-9, 'falling must mirror exactly');
+        assert.ok(Math.abs((rising + falling) - 12) < 1e-9);
+    });
+
+    // The three check types must return the same height for the same instant:
+    //   Check Now   -> interpolateTideHeight(tideData, t)
+    //   Find Times  -> fullDayTideData sample at t
+    //   Chart       -> the same fullDayTideData array
+    BUNDLED_YEARS.forEach(year => {
+        test(year + ': Check Now, Find Times and the chart agree at every sample', () => {
+            const csv = fs.readFileSync(path.join(TIDES_DIR, 'auckland_' + year + '.csv'), 'utf8');
+            let compared = 0, worst = 0;
+
+            // Sample a spread of days rather than all 365, including both DST
+            // transition weekends and both solstices
+            const probeDays = [
+                new Date(year, 0, 1), new Date(year, 0, 2), new Date(year, 2, 20),
+                new Date(year, 3, 5), new Date(year, 5, 21), new Date(year, 8, 27),
+                new Date(year, 9, 15), new Date(year, 11, 31)
+            ];
+
+            probeDays.forEach(day => {
+                const points = parseLinzCsv(csv, day);
+                if (points.length === 0) return;
+
+                const prevDay = new Date(day); prevDay.setDate(prevDay.getDate() - 1);
+                const nextDay = new Date(day); nextDay.setDate(nextDay.getDate() + 1);
+                const prevPoints = parseLinzCsv(csv, prevDay);
+                const nextPoints = parseLinzCsv(csv, nextDay);
+                const prev = prevPoints.length ? prevPoints[prevPoints.length - 1] : null;
+                const next = nextPoints.length ? nextPoints[0] : null;
+                if (!prev || !next) return; // year boundary, no adjacent data in this file
+
+                setAdjacent(prev, next);
+
+                const series = generateHourlyTideData(
+                    buildInterpolationPoints(points, prev, next), day);
+
+                series.forEach(sample => {
+                    const checkNow = interpolateTideHeight(points, sample.time);
+                    if (!checkNow || checkNow.height === null) return;
+
+                    const delta = Math.abs(checkNow.height - sample.height);
+                    worst = Math.max(worst, delta);
+                    assert.ok(delta < 1e-9,
+                        'disagreement of ' + delta.toFixed(4) + 'm at ' +
+                        sample.time.toISOString() + ' (Check Now ' + checkNow.height.toFixed(4) +
+                        ' vs series ' + sample.height.toFixed(4) + ')');
+                    compared++;
+                });
+            });
+
+            assert.ok(compared > 500, 'expected many comparisons, got ' + compared);
         });
-        assert.ok(compared > 100, 'expected to compare many samples, got ' + compared);
     });
 
     console.log('\nKnown bug 3 - day-edge windows use adjacent-day tides');
