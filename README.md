@@ -4,7 +4,7 @@ A beautiful, validated web application for calculating safe passage times under 
 
 ## 🌊 Features
 
-- **Real-time tide data** from LINZ (Land Information New Zealand) for 2024-2028
+- **Official LINZ tide data**, bundled with the site so it loads without a CORS proxy
 - **Dual bridge spans**: IN/OUT (6.2m) and HIGH (6.5m) clearance options
 - **Smart calculations**: Accounts for boat height, safety margins, and tide heights
 - **Safe passage windows**: Shows all safe times throughout the day with detailed clearance information
@@ -27,11 +27,46 @@ Spare Clearance = Actual Clearance - (Boat Height + Safety Margin)
 
 ## 📊 Data Source
 
-Tide data is sourced from **LINZ (Land Information New Zealand)**:
-- Official tide tables for Auckland
-- Updated annually
-- Available for years 2024-2028
-- CSV format with high/low tide predictions
+Tide data is sourced from **LINZ (Land Information New Zealand)** official Auckland
+tide tables, in CSV format with high/low tide predictions.
+
+### How tide data is resolved
+
+The app tries three sources in order and uses the first that returns valid data:
+
+1. **Bundled** — `tides/auckland_{year}.csv`, served same-origin from this repo.
+   No CORS proxy, nothing to rate-limit, and the file is version controlled.
+   Currently bundled: **2026-2029**.
+2. **Browser cache** — a previously fetched year held in `localStorage` for 30 days.
+3. **LINZ via CORS proxy** — corsproxy.io → allorigins → codetabs.
+
+The proxy path is last because free proxies are unreliable: corsproxy.io's free
+tier is now localhost-only and always fails from github.io, and the others are
+rate-limited with no SLA. Relying on them is what broke tide loading before.
+
+Every payload is validated before use or caching. A proxy that returns an HTML
+error page with HTTP 200 is rejected rather than stored, so a bad response can no
+longer poison the cache for 30 days.
+
+### Adding a year
+
+```bash
+./fetch_tides.sh              # current year plus the next two
+./fetch_tides.sh 2029         # or a specific year
+git add tides/ && git commit -m "Add 2029 tide data"
+```
+
+The script downloads from LINZ, checks each file contains a full year of real tide
+rows, and only then writes it into `tides/`. A monthly GitHub Actions job
+(`.github/workflows/refresh-tides.yml`) runs the same script with `--best-effort`
+and opens a pull request when the data changes; a year LINZ has not published yet
+is skipped rather than failing the run.
+
+LINZ publishes a few years ahead — currently through 2029 — so the bundled files
+run out before the app does. Merging the monthly PR is what keeps them current.
+
+Years that are not bundled still work — they fall through to the cache and proxy
+paths — they are just less reliable, so keeping `tides/` current is worthwhile.
 
 ## 🎯 Use Cases
 
@@ -45,7 +80,7 @@ Tide data is sourced from **LINZ (Land Information New Zealand)**:
 ### Technologies
 - Pure HTML/CSS/JavaScript (no dependencies)
 - Modern CSS with backdrop-filter for glass effects
-- Fetch API for CORS-proxied tide data
+- Fetch API, same-origin for bundled tide data and CORS-proxied only as a fallback
 - Responsive design with CSS Grid and Flexbox
 
 ### Browser Support
@@ -113,12 +148,44 @@ The calculator has been validated against:
 - ✅ 5 different scenario calculations
 - ✅ Real-world tide data comparisons
 
-Run validation tests:
+Run the full suite:
 ```bash
-python3 validation_tests.py
+python3 validation_tests.py              # clearance thresholds
+python3 real_linz_verification_tests.py  # against real LINZ tide data
+python3 obc_verification_tests.py        # clearance arithmetic
+python3 comprehensive_tests.py           # end-to-end scenarios
+
+# Using the real functions extracted from index.html
+TZ=Pacific/Auckland node node_extract_tests.js   # tide data path and parser
+node obc_chart_verification.js                   # against the OBC published chart
 ```
 
-Expected output: `✓ ALL TESTS PASSED (5/5 scenarios)`
+### Validation against the OBC chart
+
+`obc_chart_verification.js` checks the calculator against every cell of the
+[OBC Bridge Gap Calculation Chart](https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf),
+transcribed verbatim: 11 tidal ranges × 7 hourly steps, both spans, rising and
+falling. 407 values, no disagreement beyond the chart's own 2 dp rounding.
+
+The chart states its own method — "the 'Rule of Twelfths' has been used to
+calculate tidal heights on this chart" — and its span figures, 6.2 m at chart
+datum for the IN/OUT spans and "+0.3 m" for High, are the ones the app uses.
+
+Where a value falls exactly on a half-centimetre boundary the app displays the
+conservative cent, never more clearance than the chart shows. The test asserts
+that direction explicitly.
+
+Note that `obc_verification_tests.py`, despite its name, checks clearance
+arithmetic against values re-derived from the same formula rather than against
+the published chart. `obc_chart_verification.js` is the one that validates
+against OBC's actual numbers.
+
+`node_extract_tests.js` pulls `parseLinzCsv`, `getNZTimezoneOffset`,
+`ruleOfTwelfthsHeight` and `TideDataService` straight out of `index.html`, so the
+shipped code is what gets tested. It covers the bundled/cache/proxy fallback
+order, rejection of HTML payloads, cache self-healing, and the parser.
+
+All of it runs on every push and pull request via `.github/workflows/tests.yml`.
 
 ## 🐛 Known Issues & Fixes
 

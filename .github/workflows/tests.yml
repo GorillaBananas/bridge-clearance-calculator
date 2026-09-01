@@ -1,0 +1,62 @@
+name: Tests
+
+# GitHub Pages publishes straight from main, so this is the only gate between a
+# commit and the live site. Keep it fast and keep it required.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Clearance and tide calculation suites
+        run: |
+          python3 validation_tests.py
+          python3 real_linz_verification_tests.py
+          python3 obc_verification_tests.py
+          python3 comprehensive_tests.py
+
+      - name: Tide data path (functions extracted from index.html)
+        env:
+          TZ: Pacific/Auckland
+        run: node node_extract_tests.js
+
+      - name: Against the OBC published bridge gap chart
+        run: node obc_chart_verification.js
+
+      - name: Bundled tide files are real tide data
+        run: |
+          shopt -s nullglob
+          files=(tides/*.csv)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No bundled tide data in tides/ - the app would fall back to CORS proxies" >&2
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            rows=$(awk -F',' '
+              $1 ~ /^[0-9]+$/ && $1 >= 1 && $1 <= 31 &&
+              $3 ~ /^[0-9]+$/ && $3 >= 1 && $3 <= 12 &&
+              $4 ~ /^[0-9]+$/ && $4 >= 2000 && $4 <= 2100 &&
+              NF >= 6 { n++ } END { print n + 0 }' "$f")
+            echo "$f: $rows tide rows"
+            if [ "$rows" -lt 300 ]; then
+              echo "$f does not contain a full year of tide rows" >&2
+              exit 1
+            fi
+          done
+
+      - name: Shell scripts parse
+        run: bash -n fetch_tides.sh deploy.sh

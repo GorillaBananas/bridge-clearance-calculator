@@ -1420,7 +1420,7 @@
         </div>
     </div>
 
-    <div class="validation-badge">✓ v9.2</div>
+    <div class="validation-badge">✓ v9.3</div>
 
     <script>
         let selectedSpanClearance = 6.2;
@@ -1516,8 +1516,21 @@
                 // Base URL for LINZ tide data
                 linzBaseUrl: 'https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20',
 
-                // Available years
-                availableYears: [2024, 2025, 2026, 2027, 2028],
+                // Bundled tide data shipped with the site (same-origin, no CORS)
+                localBaseUrl: 'tides/auckland_',
+                localFetchTimeout: 5000,
+
+                // Earliest year LINZ data is published for in this app
+                minYear: 2024,
+
+                // Available years, derived at runtime so the app keeps working
+                // in future years without a code change (minYear .. this year + 2)
+                get availableYears() {
+                    const lastYear = new Date().getFullYear() + 2;
+                    const years = [];
+                    for (let y = this.minYear; y <= lastYear; y++) years.push(y);
+                    return years;
+                },
 
                 // CORS proxies to try (in order of preference)
                 corsProxies: [
@@ -1559,6 +1572,33 @@
                 CACHE_ERROR: 'cache_error'
             },
 
+            // Memoised bundled-file availability and contents, keyed by year
+            bundledAvailability: {},
+            bundledCsv: {},
+            bundledCsvPending: {},
+
+            // ============================================================
+            // DATA VALIDATION
+            // ============================================================
+
+            // Count rows that actually look like LINZ tide data
+            countTideRows(csvText) {
+                if (!csvText || typeof csvText !== 'string') return 0;
+
+                let count = 0;
+                const lines = csvText.split('\n');
+                for (const line of lines) {
+                    if (isLinzDataRow(line)) count++;
+                }
+                return count;
+            },
+
+            // A payload is only tide data if it parses as LINZ CSV.
+            // Guards against proxies returning an HTML error page with HTTP 200.
+            isValidTideCsv(csvText) {
+                return this.countTideRows(csvText) > 0;
+            },
+
             // ============================================================
             // CACHE MANAGEMENT
             // ============================================================
@@ -1591,12 +1631,20 @@
 
                     // Check if cache is still valid
                     if (daysDiff > this.config.cacheDurationDays) {
-                        console.log(`Cache for ${year} expired (${Math.round(daysDiff)} days old)`);
+                        console.log(`Cache for ${year} expired (${Math.floor(daysDiff)} days old)`);
                         this.clearCacheForYear(year);
                         return null;
                     }
 
-                    console.log(`✓ Found valid cache for ${year} (${Math.round(daysDiff)} days old)`);
+                    // Check the payload is still tide data, not a stored error page.
+                    // A poisoned cache would otherwise be served for a full month.
+                    if (!this.isValidTideCsv(data.csvText)) {
+                        console.warn(`Cache for ${year} holds no parseable tide rows - purging`);
+                        this.clearCacheForYear(year);
+                        return null;
+                    }
+
+                    console.log(`✓ Found valid cache for ${year} (${Math.floor(daysDiff)} days old)`);
                     return data;
                 } catch (e) {
                     console.warn('Error reading cache:', e);
@@ -1608,13 +1656,20 @@
             setCachedData(year, csvText) {
                 if (!this.isStorageAvailable()) return false;
 
+                // Never cache a payload that is not tide data
+                const rowCount = this.countTideRows(csvText);
+                if (rowCount === 0) {
+                    console.warn(`Refusing to cache ${year}: no parseable tide rows`);
+                    return false;
+                }
+
                 try {
                     const key = this.config.cacheKeyPrefix + year;
                     const data = {
                         year: year,
                         csvText: csvText,
                         timestamp: new Date().toISOString(),
-                        recordCount: csvText.split('\n').length
+                        recordCount: rowCount
                     };
                     localStorage.setItem(key, JSON.stringify(data));
 
@@ -1796,7 +1851,66 @@
                 );
             },
 
-            // Main method to fetch tide CSV data for a year
+            // Fetch tide data bundled with the site itself.
+            // Same-origin, so no CORS proxy is involved and nothing can rate-limit it.
+            // Returns the CSV text, or null when the year is not bundled / not valid.
+            async fetchLocalCsv(year) {
+                // Already read, or already reading, this year during this page load
+                if (this.bundledCsv[year] !== undefined) return this.bundledCsv[year];
+                if (this.bundledCsvPending[year]) return this.bundledCsvPending[year];
+
+                this.bundledCsvPending[year] = this.readLocalCsv(year);
+                try {
+                    return await this.bundledCsvPending[year];
+                } finally {
+                    delete this.bundledCsvPending[year];
+                }
+            },
+
+            async readLocalCsv(year) {
+                const url = `${this.config.localBaseUrl}${year}.csv`;
+
+                try {
+                    const response = await this.fetchWithTimeout(url, this.config.localFetchTimeout);
+                    if (!response.ok) {
+                        this.bundledAvailability[year] = false;
+                        this.bundledCsv[year] = null;
+                        return null;
+                    }
+
+                    const text = await response.text();
+
+                    // A 404 served as an HTML page, or a truncated file, is not tide data
+                    if (!this.isValidTideCsv(text)) {
+                        console.warn(`Bundled file for ${year} is not valid tide data`);
+                        this.bundledAvailability[year] = false;
+                        this.bundledCsv[year] = null;
+                        return null;
+                    }
+
+                    this.bundledAvailability[year] = true;
+                    this.bundledCsv[year] = text;
+                    return text;
+                } catch (e) {
+                    console.warn(`No bundled tide data for ${year}: ${e.message}`);
+                    this.bundledAvailability[year] = false;
+                    this.bundledCsv[year] = null;
+                    return null;
+                }
+            },
+
+            // Is tide data for this year shipped with the site?
+            // Probed at runtime and memoised - there is no hardcoded list of bundled years.
+            async isBundledAvailable(year) {
+                if (this.bundledAvailability[year] !== undefined) {
+                    return this.bundledAvailability[year];
+                }
+                await this.fetchLocalCsv(year);
+                return this.bundledAvailability[year] === true;
+            },
+
+            // Main method to fetch tide CSV data for a year.
+            // Resolution order: bundled file -> localStorage cache -> CORS proxies.
             async fetchTideDataForYear(year, forceRefresh = false) {
                 // Validate year
                 if (!this.config.availableYears.includes(year)) {
@@ -1807,7 +1921,21 @@
                     );
                 }
 
-                // Check cache first (unless force refresh)
+                // 1. Bundled data, shipped with the site and same-origin.
+                // Always preferred: it cannot be rate-limited and is version controlled,
+                // so force refresh has nothing fresher to fetch.
+                const localCsv = await this.fetchLocalCsv(year);
+                if (localCsv) {
+                    console.log(`✓ Using bundled tide data for ${year}`);
+                    this.lastDataSource = 'bundled';
+                    return {
+                        ok: true,
+                        text: async () => localCsv,
+                        source: 'bundled'
+                    };
+                }
+
+                // 2. Previously cached data (skipped on an explicit force refresh)
                 if (!forceRefresh) {
                     const cached = this.getCachedData(year);
                     if (cached) {
@@ -1823,23 +1951,51 @@
                     console.log('→ Force refresh requested, skipping cache');
                 }
 
+                // 3. LINZ via CORS proxies - the least reliable path, so it is last
                 const csvUrl = `${this.config.linzBaseUrl}${year}.csv`;
                 console.log(`=== Fetching tide data for ${year} ===`);
                 console.log(`Source URL: ${csvUrl}`);
 
-                const response = await this.fetchWithFallback(csvUrl, `year ${year}`);
+                try {
+                    const response = await this.fetchWithFallback(csvUrl, `year ${year}`);
+                    const csvText = await response.text();
 
-                // Cache the data for future use
-                const csvText = await response.text();
-                this.setCachedData(year, csvText);
-                this.lastDataSource = response.source;
+                    // A proxy can return an error page with HTTP 200. Do not accept
+                    // it, and above all do not cache it for the next 30 days.
+                    if (!this.isValidTideCsv(csvText)) {
+                        throw this.createError(
+                            this.ErrorTypes.PARSE_ERROR,
+                            'Proxy returned a payload with no tide rows',
+                            { year: year, source: response.source }
+                        );
+                    }
 
-                return {
-                    ok: true,
-                    text: async () => csvText,
-                    source: response.source,
-                    freshlyFetched: true
-                };
+                    this.setCachedData(year, csvText);
+                    this.lastDataSource = response.source;
+
+                    return {
+                        ok: true,
+                        text: async () => csvText,
+                        source: response.source,
+                        freshlyFetched: true
+                    };
+                } catch (error) {
+                    // Network path failed. Stale data beats no data, so fall back to
+                    // the cache even when a force refresh was requested.
+                    const cached = this.getCachedData(year);
+                    if (cached) {
+                        console.warn(`Network fetch failed for ${year} - falling back to cached data`);
+                        this.lastDataSource = 'cache';
+                        return {
+                            ok: true,
+                            text: async () => cached.csvText,
+                            source: 'cache',
+                            cachedAt: cached.timestamp,
+                            staleFallback: true
+                        };
+                    }
+                    throw error;
+                }
             },
 
             // Log service status (useful for debugging)
@@ -1937,6 +2093,14 @@
         const day = String(nzDate.getDate()).padStart(2, '0');
         document.getElementById('tideDate').value = `${year}-${month}-${day}`;
 
+        // Constrain the picker to the years tide data can actually be served for
+        (function setDateInputRange() {
+            const years = TideDataService.config.availableYears;
+            const dateEl = document.getElementById('tideDate');
+            dateEl.min = `${years[0]}-01-01`;
+            dateEl.max = `${years[years.length - 1]}-12-31`;
+        })();
+
         // Set date to today (NZ time)
         function setQuickDate() {
             const nz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
@@ -2010,8 +2174,20 @@
         // Track last error for retry functionality
         let lastLoadError = null;
 
-        // Update cache status display
+        // Update cache status display.
+        // Probes bundled availability once per year, then re-renders with the answer.
         function updateCacheStatus() {
+            const dateValue = document.getElementById('tideDate')?.value;
+            if (dateValue) {
+                const probeYear = new Date(dateValue + 'T00:00:00').getFullYear();
+                if (TideDataService.bundledAvailability[probeYear] === undefined) {
+                    TideDataService.isBundledAvailable(probeYear).then(() => renderCacheStatus());
+                }
+            }
+            renderCacheStatus();
+        }
+
+        function renderCacheStatus() {
             const statusEl = document.getElementById('cacheStatus');
             const dateInput = document.getElementById('tideDate').value;
 
@@ -2023,9 +2199,20 @@
 
             statusEl.classList.remove('hidden', 'cached', 'fresh');
 
+            // Bundled data wins over both cache and network, so say so once the
+            // runtime probe has answered for this year
+            if (TideDataService.bundledAvailability[year] === true) {
+                statusEl.classList.add('cached');
+                statusEl.innerHTML = `
+                    <span class="cache-status-icon">📄</span>
+                    <span class="cache-status-text">Using tide data for ${year} bundled with the app</span>
+                `;
+                return;
+            }
+
             if (cached) {
                 const cachedDate = new Date(cached.timestamp);
-                const daysAgo = Math.round((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
+                const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
                 const daysText = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;
 
                 statusEl.classList.add('cached');
@@ -2094,7 +2281,6 @@
 
             try {
                 tideData = parseLinzCsv(cached.csvText, selectedDate);
-                fullDayTideData = generateHourlyTideData(tideData, selectedDate);
 
                 if (tideData.length === 0) {
                     showToast('Cached data appears to be invalid', 'error');
@@ -2122,8 +2308,15 @@
                     prevDayLastPoint = prevDayData.length > 0 ? prevDayData[prevDayData.length - 1] : null;
                 }
 
+                // Same ordering as loadTideData: the series is built only once the
+                // adjacent-day anchors are known, and includes them
+                fullDayTideData = generateHourlyTideData(
+                    buildInterpolationPoints(tideData, prevDayLastPoint, nextDayFirstPoint),
+                    selectedDate
+                );
+
                 const cachedDate = new Date(cached.timestamp);
-                const daysAgo = Math.round((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
+                const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
                 showToast(`Using cached data (${daysAgo} days old)`, 'success');
 
                 updateCacheStatus();
@@ -2182,7 +2375,6 @@
 
                 const csvText = await response.text();
                 tideData = parseLinzCsv(csvText, selectedDate);
-                fullDayTideData = generateHourlyTideData(tideData, selectedDate);
 
                 if (tideData.length === 0) {
                     throw TideDataService.createError(
@@ -2203,6 +2395,14 @@
                 nextDayFirstPoint = await getNextDayFirstPoint(dateInput, forceRefresh);
                 prevDayLastPoint = await getPrevDayLastPoint(dateInput, forceRefresh);
 
+                // Build the 10-minute series only now that the adjacent-day points
+                // are in hand, and include them, so times before the first tide and
+                // after the last one are interpolated instead of held flat.
+                fullDayTideData = generateHourlyTideData(
+                    buildInterpolationPoints(tideData, prevDayLastPoint, nextDayFirstPoint),
+                    selectedDate
+                );
+
                 console.log('Tide data loaded for:', dateInput);
                 console.log('Tide data points:', tideData.length);
                 console.log('Hourly interpolated:', fullDayTideData.length);
@@ -2214,14 +2414,18 @@
 
                 // Show appropriate success message
                 let sourceInfo = '';
-                if (response.source === 'cache') {
+                if (response.source === 'bundled') {
+                    sourceInfo = ' (bundled with the app)';
+                } else if (response.source === 'cache') {
                     const cachedData = TideDataService.getCachedData(year);
                     if (cachedData) {
                         const cachedDate = new Date(cachedData.timestamp);
-                        const daysAgo = Math.round((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
+                        const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
                         const dateStr = cachedDate.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
                         const daysText = daysAgo === 0 ? 'today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
-                        sourceInfo = ` (cached data, pulled ${dateStr} - ${daysText})`;
+                        sourceInfo = response.staleFallback
+                            ? ` (offline - cached data from ${dateStr}, ${daysText})`
+                            : ` (cached data, pulled ${dateStr} - ${daysText})`;
                     }
                 } else {
                     sourceInfo = ' (fresh data, pulled today)';
@@ -2267,137 +2471,215 @@
             }
         }
 
+        // Resolve the NZ UTC offset for a specific wall-clock moment.
+        //
+        // The transitions happen at a time of day, not at midnight, so this takes
+        // the tide's own hours and minutes into account. Resolving per-day put
+        // every tide between 00:00 and the changeover an hour out on the two
+        // transition days each year (next: Sunday 27 September 2026).
+        //
+        // NZ Daylight Saving Time rules:
+        //   Starts: last Sunday of September, 02:00 NZST -> 03:00 NZDT (UTC+13)
+        //   Ends:   first Sunday of April,    03:00 NZDT -> 02:00 NZST (UTC+12)
+        //
+        // `date` must be a local-naive Date carrying the NZ wall-clock time.
         function getNZTimezoneOffset(date) {
-            // NZ Daylight Saving Time rules:
-            // Starts: Last Sunday of September at 2am (UTC+13)
-            // Ends: First Sunday of April at 3am (UTC+12)
-            
             const year = date.getFullYear();
-            const month = date.getMonth(); // 0-11
-            
-            // Find last Sunday of September
-            const septStart = new Date(year, 8, 30); // Sept 30
-            while (septStart.getDay() !== 0) septStart.setDate(septStart.getDate() - 1);
-            
-            // Find first Sunday of April
-            const aprilEnd = new Date(year, 3, 7); // April 7 (max first Sunday can be)
-            while (aprilEnd.getDay() !== 0) aprilEnd.setDate(aprilEnd.getDate() - 1);
-            
-            // Check if date is in DST period (Oct-Mar)
-            const inDST = (month >= 9) || (month <= 2) || 
-                         (month === 8 && date >= septStart) ||
-                         (month === 3 && date < aprilEnd);
-            
-            const offset = inDST ? '+13:00' : '+12:00';
-            console.log(`  DST check for ${date.toISOString().split('T')[0]}: month=${month}, inDST=${inDST}, offset=${offset}`);
-            
-            return offset;
+
+            // Last Sunday of September at 02:00 - clocks go forward
+            const dstStart = new Date(year, 8, 30, 2, 0, 0);
+            while (dstStart.getDay() !== 0) dstStart.setDate(dstStart.getDate() - 1);
+
+            // First Sunday of April at 03:00 - clocks go back
+            const dstEnd = new Date(year, 3, 7, 3, 0, 0);
+            while (dstEnd.getDay() !== 0) dstEnd.setDate(dstEnd.getDate() - 1);
+
+            // Southern hemisphere: DST runs from late September into early April.
+            // The 02:00-02:59 hour on the April changeover day happens twice; LINZ
+            // publishes the first (NZDT) pass, which is what `date < dstEnd` gives.
+            const inDST = (date >= dstStart) || (date < dstEnd);
+
+            return inDST ? '+13:00' : '+12:00';
+        }
+
+        // Does this CSV line look like a LINZ tide row?
+        // Used instead of skipping a fixed number of header lines, so files with
+        // 0, 2 or 3 header lines all parse identically.
+        function isLinzDataRow(line) {
+            if (!line) return false;
+
+            const parts = line.trim().split(',');
+            if (parts.length < 6) return false;
+
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[2], 10);
+            const year = parseInt(parts[3], 10);
+
+            if (!Number.isInteger(day) || day < 1 || day > 31) return false;
+            if (!Number.isInteger(month) || month < 1 || month > 12) return false;
+            if (!Number.isInteger(year) || year < 2000 || year > 2100) return false;
+
+            return true;
         }
 
         function parseLinzCsv(csvText, targetDate) {
             const lines = csvText.trim().split('\n');
             const data = [];
-            
-            for (let i = 2; i < lines.length; i++) {
+
+            const targetDay = targetDate.getDate();
+            const targetMonth = targetDate.getMonth() + 1; // getMonth is 0-indexed
+            const targetYear = targetDate.getFullYear();
+
+            // Start at the first line and skip by content. Blindly skipping two
+            // header lines silently dropped 1 and 2 January from the bundled file,
+            // which has no header at all.
+            for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
-                if (!line) continue;
-                
+                if (!isLinzDataRow(line)) continue;
+
                 const parts = line.split(',');
-                if (parts.length < 6) continue;
-                
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[2]);
-                const year = parseInt(parts[3]);
-                
-                // Compare dates directly without timezone conversion
-                const targetDay = targetDate.getDate();
-                const targetMonth = targetDate.getMonth() + 1; // getMonth is 0-indexed
-                const targetYear = targetDate.getFullYear();
-                
-                console.log(`  CSV row: day=${day}, month=${month}, year=${year} vs target: day=${targetDay}, month=${targetMonth}, year=${targetYear}`);
-                
+
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[2], 10);
+                const year = parseInt(parts[3], 10);
+
                 if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
-                
-                // Use the CSV date values for creating the line date (for DST calculation)
-                const lineDate = new Date(year, month - 1, day);
-                
-                // Get correct timezone offset for this specific date
-                const tzOffset = getNZTimezoneOffset(lineDate);
-                console.log(`Date ${year}-${month}-${day}: Using timezone offset ${tzOffset}`);
-                
+
                 for (let j = 0; j < 4; j++) {
                     const timeIdx = 4 + j * 2;
                     const heightIdx = 5 + j * 2;
-                    
+
                     if (timeIdx >= parts.length || heightIdx >= parts.length) break;
-                    
+
                     const timeStr = parts[timeIdx].trim();
                     const heightStr = parts[heightIdx].trim();
-                    
-                    console.log(`  Tide ${j}: Column ${timeIdx}="${timeStr}", Column ${heightIdx}="${heightStr}"`);
-                    
+
                     if (!timeStr || !heightStr) continue;
-                    
-                    const [hours, minutes] = timeStr.split(':').map(Number);
-                    console.log(`  Parsed as: ${hours}:${String(minutes).padStart(2,'0')}`);
-                    
-                    // Parse with correct NZ timezone offset for this date
-                    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:00${tzOffset}`;
-                    console.log(`  Created date string: ${dateStr}`);
-                    
-                    const tideTime = new Date(dateStr);
-                    console.log(`  Final Date object: ${tideTime.toISOString()} (displays as ${tideTime.toLocaleTimeString()})`);
-                    
+
+                    // Reject malformed times rather than letting an Invalid Date
+                    // reach the clearance maths
+                    const timeMatch = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+                    if (!timeMatch) {
+                        console.warn(`Skipping malformed tide time "${timeStr}" on ${year}-${month}-${day}`);
+                        continue;
+                    }
+
+                    const hours = parseInt(timeMatch[1], 10);
+                    const minutes = parseInt(timeMatch[2], 10);
+                    if (hours > 23 || minutes > 59) {
+                        console.warn(`Skipping out-of-range tide time "${timeStr}" on ${year}-${month}-${day}`);
+                        continue;
+                    }
+
                     const height = parseFloat(heightStr);
-                    
+                    if (!Number.isFinite(height)) {
+                        console.warn(`Skipping non-numeric tide height "${heightStr}" on ${year}-${month}-${day}`);
+                        continue;
+                    }
+
+                    // Offset is resolved against the tide's own time of day so that
+                    // tides either side of a DST changeover get the right offset
+                    const tideLocal = new Date(year, month - 1, day, hours, minutes, 0);
+                    const tzOffset = getNZTimezoneOffset(tideLocal);
+
+                    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${tzOffset}`;
+                    const tideTime = new Date(dateStr);
+
+                    if (isNaN(tideTime.getTime())) {
+                        console.warn(`Skipping unparseable tide timestamp "${dateStr}"`);
+                        continue;
+                    }
+
                     data.push({ time: tideTime, height: height });
                 }
             }
-            
+
             if (data.length < 4) {
                 console.log(`⚠ Only ${data.length} tide points found for this date (some days have 3 tides)`);
             }
-            
+
             return data;
+        }
+
+        // Maritime Rule of Twelfths, applied across the actual interval between two
+        // tide points: 1/12, 2/12, 3/12, 3/12, 2/12, 1/12 of the range per sixth.
+        //
+        // This is the single implementation. "Find Times" and the chart used to
+        // interpolate linearly while "Check Now" used the Rule of Twelfths, so the
+        // two disagreed by up to ~20% of the tidal range on the same minute.
+        function ruleOfTwelfthsHeight(before, after, targetTime) {
+            const totalDuration = after.time - before.time;
+            if (!(totalDuration > 0)) return before.height;
+
+            let progress = (targetTime - before.time) / totalDuration;
+            progress = Math.max(0, Math.min(1, progress));
+
+            // Cumulative fraction of range at the end of each sixth of the cycle
+            const twelfths = [0, 1 / 12, 3 / 12, 6 / 12, 9 / 12, 11 / 12, 1];
+
+            const scaledProgress = progress * 6;
+            const sixthIndex = Math.floor(scaledProgress);
+
+            if (sixthIndex >= 6) return after.height;
+
+            const withinSixth = scaledProgress - sixthIndex;
+            const startFraction = twelfths[sixthIndex];
+            const endFraction = twelfths[sixthIndex + 1];
+            const heightFraction = startFraction + (endFraction - startFraction) * withinSixth;
+
+            return before.height + (after.height - before.height) * heightFraction;
+        }
+
+        // The day's tide points plus the adjacent-day anchors, in time order.
+        // Day-edge windows are interpolated against real neighbouring tides rather
+        // than reported flat at the nearest point's height.
+        function buildInterpolationPoints(dayPoints, prevPoint, nextPoint) {
+            const points = [];
+            if (prevPoint) points.push(prevPoint);
+            points.push(...dayPoints);
+            if (nextPoint) points.push(nextPoint);
+            return points.sort((a, b) => a.time - b.time);
+        }
+
+        // Find the two tide points bracketing a moment, or null
+        function findBracketingPoints(tidePoints, targetTime) {
+            for (let i = 0; i < tidePoints.length - 1; i++) {
+                if (tidePoints[i].time <= targetTime && tidePoints[i + 1].time >= targetTime) {
+                    return { before: tidePoints[i], after: tidePoints[i + 1] };
+                }
+            }
+            return null;
         }
 
         function generateHourlyTideData(tidePoints, date) {
             if (tidePoints.length < 2) return tidePoints;
-            
+
             const intervalData = [];
             const year = date.getFullYear();
             const month = date.getMonth();
             const day = date.getDate();
-            
+
             // Generate data points every 10 minutes instead of every hour
             for (let hour = 0; hour < 24; hour++) {
                 for (let minute = 0; minute < 60; minute += 10) {
                     const currentTime = new Date(year, month, day, hour, minute, 0);
-                    
-                    let before = null, after = null;
-                    for (let i = 0; i < tidePoints.length - 1; i++) {
-                        if (tidePoints[i].time <= currentTime && tidePoints[i + 1].time >= currentTime) {
-                            before = tidePoints[i];
-                            after = tidePoints[i + 1];
-                            break;
-                        }
-                    }
-                    
-                    if (!before || !after) {
-                        const nearest = tidePoints.reduce((prev, curr) => 
+
+                    const bracket = findBracketingPoints(tidePoints, currentTime);
+
+                    if (!bracket) {
+                        const nearest = tidePoints.reduce((prev, curr) =>
                             Math.abs(curr.time - currentTime) < Math.abs(prev.time - currentTime) ? curr : prev
                         );
                         intervalData.push({ time: currentTime, height: nearest.height });
                     } else {
-                        const timeDiff = after.time - before.time;
-                        const timeFromBefore = currentTime - before.time;
-                        const ratio = timeFromBefore / timeDiff;
-                        const interpolatedHeight = before.height + (after.height - before.height) * ratio;
-                        intervalData.push({ time: currentTime, height: interpolatedHeight });
+                        intervalData.push({
+                            time: currentTime,
+                            height: ruleOfTwelfthsHeight(bracket.before, bracket.after, currentTime)
+                        });
                     }
                 }
             }
-            
+
             return intervalData;
         }
 
@@ -2484,46 +2766,15 @@
                 }
             }
             
-            // Determine if we're going from high to low or low to high
+            // Same Rule of Twelfths the chart and "Find Times" use
             const isHighToLow = before.height > after.height;
-            const tideRange = Math.abs(after.height - before.height);
-            
-            // Calculate hours elapsed from start point
             const totalDuration = (after.time - before.time) / (1000 * 60 * 60); // in hours
             const hoursElapsed = (targetTime - before.time) / (1000 * 60 * 60);
-            
-            // CRITICAL FIX: Use actual hours directly with Rule of Twelfths pattern
-            // Do NOT scale to 6h - treat the actual period as the reference
-            // Rule of Twelfths pattern applies to elapsed hours in the actual cycle
-            
-            let fractionOfRange;
-            if (hoursElapsed <= 1) {
-                fractionOfRange = (1/12) * hoursElapsed;
-            } else if (hoursElapsed <= 2) {
-                fractionOfRange = (1/12) + (2/12) * (hoursElapsed - 1);
-            } else if (hoursElapsed <= 3) {
-                fractionOfRange = (3/12) + (3/12) * (hoursElapsed - 2);
-            } else if (hoursElapsed <= 4) {
-                fractionOfRange = (6/12) + (3/12) * (hoursElapsed - 3);
-            } else if (hoursElapsed <= 5) {
-                fractionOfRange = (9/12) + (2/12) * (hoursElapsed - 4);
-            } else {
-                fractionOfRange = (11/12) + (1/12) * (hoursElapsed - 5);
-            }
-            
-            // Apply the fraction to get interpolated height
-            let interpolatedHeight;
-            if (isHighToLow) {
-                // Falling tide: subtract the fraction of range from high point
-                interpolatedHeight = before.height - (tideRange * fractionOfRange);
-            } else {
-                // Rising tide: add the fraction of range to low point
-                interpolatedHeight = before.height + (tideRange * fractionOfRange);
-            }
-            
+
+            const interpolatedHeight = ruleOfTwelfthsHeight(before, after, targetTime);
+
             console.log(`Rule of Twelfths: ${before.time.toLocaleTimeString()} (${before.height.toFixed(2)}m) -> ${after.time.toLocaleTimeString()} (${after.height.toFixed(2)}m)`);
             console.log(`  ${isHighToLow ? 'Falling' : 'Rising'} tide, ${hoursElapsed.toFixed(2)}h elapsed of ${totalDuration.toFixed(2)}h period`);
-            console.log(`  Fraction of range: ${(fractionOfRange * 12).toFixed(2)}/12 (${(fractionOfRange * 100).toFixed(1)}%)`);
             console.log(`  Result: ${interpolatedHeight.toFixed(2)}m`);
             
             return {
@@ -3162,5 +3413,9 @@
             }
         });
     </script>
+
+    <!-- Privacy-friendly, cookieless analytics -->
+    <script data-goatcounter="https://tidechecker.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
