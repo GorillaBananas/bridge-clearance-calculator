@@ -6,8 +6,14 @@
 # is served directly by GitHub Pages, so it never depends on a free proxy.
 #
 # Usage:
-#   ./fetch_tides.sh              # current year plus the next two
-#   ./fetch_tides.sh 2027 2028    # specific years
+#   ./fetch_tides.sh                 # current year plus the next two
+#   ./fetch_tides.sh 2027 2028       # specific years
+#   ./fetch_tides.sh --best-effort   # succeed if at least one year was fetched
+#
+# LINZ publishes only a few years ahead, so asking for a year it has not
+# published yet is expected rather than broken. --best-effort exists for the
+# scheduled job: it keeps a not-yet-published year from failing the run and
+# suppressing a pull request for the years that did update.
 #
 set -euo pipefail
 
@@ -16,8 +22,18 @@ DEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tides"
 
 mkdir -p "$DEST_DIR"
 
-if [ "$#" -gt 0 ]; then
-    YEARS=("$@")
+BEST_EFFORT=0
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --best-effort) BEST_EFFORT=1 ;;
+        -*) echo "Unknown option: $arg" >&2; exit 2 ;;
+        *) ARGS+=("$arg") ;;
+    esac
+done
+
+if [ "${#ARGS[@]}" -gt 0 ]; then
+    YEARS=("${ARGS[@]}")
 else
     CURRENT_YEAR="$(date +%Y)"
     YEARS=("$CURRENT_YEAR" "$((CURRENT_YEAR + 1))" "$((CURRENT_YEAR + 2))")
@@ -37,6 +53,7 @@ count_tide_rows() {
 }
 
 failures=0
+saved=0
 
 for year in "${YEARS[@]}"; do
     url="${BASE_URL}${year}.csv"
@@ -62,12 +79,15 @@ for year in "${YEARS[@]}"; do
 
     mv "$tmp" "$target"
     chmod 644 "$target"
+    saved=$((saved + 1))
     printf 'saved %s rows to tides/auckland_%s.csv\n' "$rows" "$year"
 done
 
 if [ "$failures" -gt 0 ]; then
-    echo "$failures year(s) could not be fetched." >&2
-    exit 1
+    echo "$failures year(s) could not be fetched (LINZ may not have published them yet)." >&2
+    if [ "$BEST_EFFORT" -eq 0 ] || [ "$saved" -eq 0 ]; then
+        exit 1
+    fi
 fi
 
 echo "Done. Commit the files in tides/ to publish them."

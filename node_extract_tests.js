@@ -123,8 +123,20 @@ function test(name, fn) {
     return Promise.resolve();
 }
 
-const CSV_PATH = path.join(__dirname, 'tides', 'auckland_2026.csv');
+const TIDES_DIR = path.join(__dirname, 'tides');
+const BUNDLED_YEARS = fs.readdirSync(TIDES_DIR)
+    .map(f => /^auckland_(\d{4})\.csv$/.exec(f))
+    .filter(Boolean)
+    .map(m => Number(m[1]))
+    .sort((a, b) => a - b);
+assert.ok(BUNDLED_YEARS.includes(2026), 'expected tides/auckland_2026.csv');
+
+const CSV_PATH = path.join(TIDES_DIR, 'auckland_2026.csv');
 const BUNDLED_CSV = fs.readFileSync(CSV_PATH, 'utf8');
+
+function daysInYear(year) {
+    return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+}
 
 function resetState() {
     store.clear();
@@ -158,20 +170,37 @@ async function main() {
         assert.strictEqual(points.length, 4);
     });
 
-    await test('all 365 days of 2026 parse with finite heights and valid times', () => {
-        let days = 0, points = 0;
-        for (let d = new Date(2026, 0, 1); d.getFullYear() === 2026; d.setDate(d.getDate() + 1)) {
-            const parsed = parseLinzCsv(BUNDLED_CSV, new Date(d));
-            assert.ok(parsed.length >= 3, 'only ' + parsed.length + ' points on ' + d.toDateString());
-            parsed.forEach(p => {
-                assert.ok(Number.isFinite(p.height), 'non-finite height on ' + d.toDateString());
-                assert.ok(!isNaN(p.time.getTime()), 'invalid date on ' + d.toDateString());
-            });
-            days++;
-            points += parsed.length;
-        }
-        assert.strictEqual(days, 365);
-        assert.ok(points > 1400, 'expected >1400 tide points across the year, got ' + points);
+    BUNDLED_YEARS.forEach(year => {
+        const csv = fs.readFileSync(path.join(TIDES_DIR, 'auckland_' + year + '.csv'), 'utf8');
+
+        test('every day of ' + year + ' parses with finite heights and valid times', () => {
+            // The files as published carry a BOM, three header lines and CRLF
+            // endings; the 2026 file has none of those. Both must parse.
+            let days = 0, points = 0;
+            for (let d = new Date(year, 0, 1); d.getFullYear() === year; d.setDate(d.getDate() + 1)) {
+                const parsed = parseLinzCsv(csv, new Date(d));
+                assert.ok(parsed.length >= 3, 'only ' + parsed.length + ' points on ' + d.toDateString());
+                parsed.forEach(p => {
+                    assert.ok(Number.isFinite(p.height), 'non-finite height on ' + d.toDateString());
+                    assert.ok(!isNaN(p.time.getTime()), 'invalid date on ' + d.toDateString());
+                    assert.ok(p.height >= -1 && p.height <= 6, 'implausible height ' + p.height);
+                });
+                days++;
+                points += parsed.length;
+            }
+            assert.strictEqual(days, daysInYear(year));
+            assert.ok(points > days * 3.5, 'expected ~4 tides a day, got ' + points + ' over ' + days);
+        });
+
+        test(year + ': 1 and 2 January return tide points', () => {
+            assert.ok(parseLinzCsv(csv, new Date(year, 0, 1)).length >= 3);
+            assert.ok(parseLinzCsv(csv, new Date(year, 0, 2)).length >= 3);
+        });
+
+        test(year + ': file validates as tide data', () => {
+            assert.strictEqual(TideDataService.isValidTideCsv(csv), true);
+            assert.strictEqual(TideDataService.countTideRows(csv), daysInYear(year));
+        });
     });
 
     await test('files with 0, 2 and 3 header lines all parse identically', () => {

@@ -36,6 +36,7 @@ The app tries three sources in order and uses the first that returns valid data:
 
 1. **Bundled** — `tides/auckland_{year}.csv`, served same-origin from this repo.
    No CORS proxy, nothing to rate-limit, and the file is version controlled.
+   Currently bundled: **2026-2029**.
 2. **Browser cache** — a previously fetched year held in `localStorage` for 30 days.
 3. **LINZ via CORS proxy** — corsproxy.io → allorigins → codetabs.
 
@@ -57,8 +58,12 @@ git add tides/ && git commit -m "Add 2029 tide data"
 
 The script downloads from LINZ, checks each file contains a full year of real tide
 rows, and only then writes it into `tides/`. A monthly GitHub Actions job
-(`.github/workflows/refresh-tides.yml`) runs the same script and opens a pull
-request when the data changes.
+(`.github/workflows/refresh-tides.yml`) runs the same script with `--best-effort`
+and opens a pull request when the data changes; a year LINZ has not published yet
+is skipped rather than failing the run.
+
+LINZ publishes a few years ahead — currently through 2029 — so the bundled files
+run out before the app does. Merging the monthly PR is what keeps them current.
 
 Years that are not bundled still work — they fall through to the cache and proxy
 paths — they are just less reliable, so keeping `tides/` current is worthwhile.

@@ -21,7 +21,9 @@ jobs:
 
       - name: Fetch tide tables from LINZ
         id: fetch
-        run: ./fetch_tides.sh
+        # Best effort: LINZ publishes only a few years ahead, so a year it has
+        # not released yet must not suppress the PR for the years that did update
+        run: ./fetch_tides.sh --best-effort
 
       - name: Open a pull request if anything changed
         env:

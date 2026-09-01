@@ -36,7 +36,8 @@ Locate code by searching for the function or identifier, not by line number.
 ### Tide data resolution (v9.3)
 `TideDataService.fetchTideDataForYear(year, forceRefresh)` resolves in this order:
 
-1. **Bundled** - `tides/auckland_{year}.csv`, same-origin, no CORS. Preferred even
+1. **Bundled** - `tides/auckland_{year}.csv`, same-origin, no CORS (2026-2029
+   are committed). Preferred even
    on a force refresh: the file is version controlled, so there is nothing fresher
    to fetch. Availability is probed at runtime and memoised in
    `TideDataService.bundledAvailability`; there is no hardcoded list of years.
@@ -60,7 +61,19 @@ poisoned cache self-heals instead of serving junk for 30 days.
 git add tides/ && git commit -m "Add 2029 tide data"
 ```
 The script validates each download contains a full year of real tide rows before
-saving. `.github/workflows/refresh-tides.yml` runs it monthly and opens a PR.
+saving. `.github/workflows/refresh-tides.yml` runs it monthly with `--best-effort`
+and opens a PR; a year LINZ has not published yet is skipped, not fatal.
+
+**What auto-extends and what does not**: `availableYears`, the date picker range
+and the DST rules are all computed at runtime, so the *code* needs no change for
+future years. The *data* does not appear by itself - a year is only bundled once
+its CSV is committed. Merge the monthly PR, or run the script by hand. If a year
+is not bundled the app still works, but falls back to the unreliable proxy path.
+
+Note the published LINZ files carry a BOM, three header lines and CRLF endings,
+while the original bundled 2026 file has none of them. `isLinzDataRow` identifies
+rows by content so both shapes parse; `node_extract_tests.js` checks every file in
+`tides/` for exactly this reason.
 
 ### Multi-Bridge Support (Prepared, not published)
 - `BridgeConfig` object supports multiple bridges
@@ -168,7 +181,7 @@ Search by identifier - line numbers move.
 
 ## Data Sources
 
-- **Bundled**: `tides/auckland_{year}.csv` in this repo (currently 2026)
+- **Bundled**: `tides/auckland_{year}.csv` in this repo (currently 2026-2029)
 - **LINZ (fallback)**: `https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20{year}.csv`
 - **Year range**: `minYear` (2024) to the current year + 2, computed at runtime.
   The `#tideDate` picker's `min`/`max` are set from the same range.
