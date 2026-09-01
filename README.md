@@ -150,14 +150,35 @@ The calculator has been validated against:
 
 Run the full suite:
 ```bash
-python3 validation_tests.py            # clearance thresholds
-python3 real_linz_verification_tests.py  # against real LINZ 2026 data
-python3 obc_verification_tests.py        # against OBC reference values
+python3 validation_tests.py              # clearance thresholds
+python3 real_linz_verification_tests.py  # against real LINZ tide data
+python3 obc_verification_tests.py        # clearance arithmetic
 python3 comprehensive_tests.py           # end-to-end scenarios
 
-# Tide data path, using the real functions extracted from index.html
-TZ=Pacific/Auckland node node_extract_tests.js
+# Using the real functions extracted from index.html
+TZ=Pacific/Auckland node node_extract_tests.js   # tide data path and parser
+node obc_chart_verification.js                   # against the OBC published chart
 ```
+
+### Validation against the OBC chart
+
+`obc_chart_verification.js` checks the calculator against every cell of the
+[OBC Bridge Gap Calculation Chart](https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf),
+transcribed verbatim: 11 tidal ranges × 7 hourly steps, both spans, rising and
+falling. 407 values, no disagreement beyond the chart's own 2 dp rounding.
+
+The chart states its own method — "the 'Rule of Twelfths' has been used to
+calculate tidal heights on this chart" — and its span figures, 6.2 m at chart
+datum for the IN/OUT spans and "+0.3 m" for High, are the ones the app uses.
+
+Where a value falls exactly on a half-centimetre boundary the app displays the
+conservative cent, never more clearance than the chart shows. The test asserts
+that direction explicitly.
+
+Note that `obc_verification_tests.py`, despite its name, checks clearance
+arithmetic against values re-derived from the same formula rather than against
+the published chart. `obc_chart_verification.js` is the one that validates
+against OBC's actual numbers.
 
 `node_extract_tests.js` pulls `parseLinzCsv`, `getNZTimezoneOffset`,
 `ruleOfTwelfthsHeight` and `TideDataService` straight out of `index.html`, so the

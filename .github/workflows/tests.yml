@@ -34,6 +34,9 @@ jobs:
           TZ: Pacific/Auckland
         run: node node_extract_tests.js
 
+      - name: Against the OBC published bridge gap chart
+        run: node obc_chart_verification.js
+
       - name: Bundled tide files are real tide data
         run: |
           shopt -s nullglob

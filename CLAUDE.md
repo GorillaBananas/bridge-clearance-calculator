@@ -196,9 +196,21 @@ python3 real_linz_verification_tests.py
 python3 obc_verification_tests.py
 python3 comprehensive_tests.py
 
-# Tide data path, using the real functions extracted from index.html
-TZ=Pacific/Auckland node node_extract_tests.js
+# Using the real functions extracted from index.html
+TZ=Pacific/Auckland node node_extract_tests.js   # tide data path and parser
+node obc_chart_verification.js                   # against the OBC published chart
 ```
+
+`obc_chart_verification.js` is the external check: every cell of the OBC Bridge
+Gap Calculation Chart, transcribed verbatim (11 ranges × 7 hourly steps, both
+spans, rising and falling — 407 values). The chart states it uses the Rule of
+Twelfths and a 6.2m gap at chart datum, +0.3m for the High span, which is what
+the app implements. On half-cent rounding boundaries the app displays the
+conservative cent; the test asserts it never shows more clearance than the chart.
+
+Beware `obc_verification_tests.py`: despite the name, its "OBC reference values"
+are re-derived from the same subtraction the app performs, so its 0.00% error
+figure is circular. It tests arithmetic, not agreement with OBC.
 
 `node_extract_tests.js` pulls the shipped functions and `TideDataService` out of
 `index.html` by brace matching and runs them against `tides/auckland_2026.csv`
