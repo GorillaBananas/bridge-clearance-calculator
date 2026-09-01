@@ -398,7 +398,7 @@ def main():
     print("=" * 80)
 
     # Load LINZ data
-    csv_path = os.path.join(os.path.dirname(__file__), 'auckland_2026_tides.csv')
+    csv_path = os.path.join(os.path.dirname(__file__), 'tides', 'auckland_2026.csv')
 
     if not os.path.exists(csv_path):
         print(f"\nERROR: Cannot find {csv_path}")
