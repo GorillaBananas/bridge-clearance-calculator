@@ -29,7 +29,10 @@ Locate code by searching for the function or identifier, not by line number.
   has been one. Do not add one: it hides the address bar and navigation buttons.
 - Tide data ships in `tides/` and is served same-origin; LINZ via CORS proxy is a
   fallback only
-- Deployed to gorillabananas.github.io straight from `main`
+- Deployed straight from `main` to
+  https://gorillabananas.github.io/bridge-clearance-calculator/ - a project page,
+  **not** the user root. Asset paths in the page must stay relative (`tides/...`);
+  the absolute URLs in the og:/twitter: meta tags must include the subdirectory
 
 ## Features
 

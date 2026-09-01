@@ -58,5 +58,28 @@ jobs:
             fi
           done
 
+      - name: Page metadata points at the real site
+        # The site is a project page under /bridge-clearance-calculator/, not the
+        # user root. Absolute URLs that omit it produce dead link previews.
+        run: |
+          bad=$(grep -o 'content="https://gorillabananas\.github\.io[^"]*"' index.html \
+                | grep -v '/bridge-clearance-calculator/' || true)
+          if [ -n "$bad" ]; then
+            echo "Absolute URLs missing the project subdirectory:" >&2
+            echo "$bad" >&2
+            exit 1
+          fi
+          # every local asset an absolute URL points at must exist in the repo
+          grep -o 'content="https://gorillabananas\.github\.io/bridge-clearance-calculator/[^"]*"' index.html \
+            | sed 's|.*/bridge-clearance-calculator/||; s|"$||' \
+            | grep -v '^$' | sort -u \
+            | while read -r asset; do
+                if [ ! -f "$asset" ]; then
+                  echo "index.html references $asset, which is not in the repo" >&2
+                  exit 1
+                fi
+                echo "ok: $asset"
+              done
+
       - name: Shell scripts parse
         run: bash -n fetch_tides.sh deploy.sh
