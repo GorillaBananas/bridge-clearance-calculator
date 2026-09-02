@@ -451,6 +451,10 @@
         .day.today { background: var(--card); border-color: var(--border); }
         .day-name { width: 48px; flex: 0 0 auto; padding-top: 3px; font-size: 14px; font-weight: 700; color: var(--muted-strong); }
         .day.today .day-name { color: var(--navy); }
+
+        /* Open, the row is the panel's heading rather than a 48px day stub. */
+        .day-name.open { width: auto; flex: 1; padding-top: 0; font-size: 16px; color: var(--navy); }
+        .day .close { flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--link); white-space: nowrap; }
         .day-windows { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
         .win { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -471,7 +475,7 @@
             margin: 12px 0;
             box-shadow: 0 10px 28px rgba(10, 22, 40, 0.10);
         }
-        .day-block.open > .day { border-color: transparent; background: transparent; padding-bottom: 14px; }
+        .day-block.open > .day { border-color: transparent; background: transparent; padding: 14px 18px; align-items: baseline; }
 
         .day-detail {
             margin: 0 18px;
@@ -492,6 +496,17 @@
         .day-detail-head .close { font-size: 13px; font-weight: 600; color: var(--link); white-space: nowrap; }
 
         .curve { width: 100%; height: auto; display: block; margin-bottom: 2px; }
+
+        /* Two dashed lines with nothing naming them is a puzzle, not a chart. */
+        .curve-key { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted-45); }
+        .curve-key span { display: flex; align-items: center; gap: 8px; }
+        .curve-key i {
+            flex: 0 0 auto;
+            width: 22px; height: 0;
+            border-top: 2px dashed var(--danger-line);
+        }
+        .curve-key i.safe { border-top-color: var(--caution-line); }
+        .curve-key b { font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
 
         .extremes {
             display: flex;
@@ -522,13 +537,16 @@
             flex-direction: column;
             gap: 1px;
         }
-        .moment.best { background: var(--safe-soft); }
+        /* Named `peak`, not `best`: the week's best-window card is `.best`, and a
+           `.moment.best` silently inherited its margin and padding, which is what
+           pushed this card 20px below its neighbours. */
+        .moment.peak { background: var(--safe-soft); }
         /* All three labels hold one line, so the cards keep a common baseline. */
         .moment .when { font-size: 11.5px; font-weight: 600; color: var(--muted-45); white-space: nowrap; }
-        .moment.best .when { color: var(--safe-deep); }
+        .moment.peak .when { color: var(--safe-deep); }
         .moment .gap { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
         .moment .spare { font-size: 12px; color: var(--muted); }
-        .moment.best .spare { color: var(--safe-deep); }
+        .moment.peak .spare { color: var(--safe-deep); }
 
         .detail-safe { font-size: 12.5px; color: var(--muted-45); }
         .detail-actions { display: flex; gap: 8px; margin-top: 4px; }
@@ -2740,13 +2758,21 @@
                     body = '<div class="day-windows">' + shown.map(win => renderWindowLine(day, win)).join('') + '</div>';
                 }
 
+                // Open, the row becomes the panel's heading: the summary lines it
+                // carries when closed are all restated in the detail below, and
+                // printing each window's times and safe range twice was reported as
+                // confusing rather than helpful.
+                const head = isOpen
+                    ? '<span class="day-name open">' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
+                      '<span class="close">Tap to close &#8963;</span>'
+                    : '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' + body;
+
                 return '<div class="day-block' + (isOpen ? ' open' : '') + '">' +
                     '<button type="button" class="day' + (isToday && !isOpen ? ' today' : '') +
                         '" data-date="' + key + '" aria-expanded="' + isOpen + '">' +
-                        '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' +
-                        body +
+                        head +
                     '</button>' +
-                    (isOpen ? renderDayDetail(day, true) : '') +
+                    (isOpen ? renderDayDetail(day, false) : '') +
                 '</div>';
             }).join('');
 
@@ -2784,7 +2810,7 @@
 
         // The expanded day: the tide curve with both limits drawn on it, the day's
         // highs and lows, and what each window opens, peaks and closes at.
-        function renderDayDetail(day, collapsible) {
+        function renderDayDetail(day, withHeading) {
             if (day.unavailable) {
                 return '<div class="day-detail"><span class="detail-safe">No published predictions for this day.</span></div>';
             }
@@ -2801,12 +2827,10 @@
                   '</span>';
 
             return '<div class="day-detail">' +
-                '<div class="day-detail-head">' +
-                    '<span>' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
-                    (collapsible
-                        ? '<button type="button" class="close" data-collapse>Tap to close &#8963;</button>'
-                        : '') +
-                '</div>' +
+                (withHeading
+                    ? '<div class="day-detail-head"><span>' +
+                      escapeHtml(fmtDayShort(day.date)) + '</span></div>'
+                    : '') +
                 renderDayCurve(day) +
                 '<div class="extremes">' + extremes + '</div>' +
                 body +
@@ -2818,8 +2842,8 @@
 
         function renderDetailWindow(day, win) {
             const closesAt = win.end.time;
-            const moment = (label, point, isBest) =>
-                '<div class="moment' + (isBest ? ' best' : '') + '">' +
+            const moment = (label, point, isPeak) =>
+                '<div class="moment' + (isPeak ? ' peak' : '') + '">' +
                     '<span class="when">' + label + ' ' + fmtTime(point.time) + '</span>' +
                     '<span class="gap num">' + fmtMetres(point.actualClearance) + ' m</span>' +
                     '<span class="spare num">' + fmtMetres(point.spareClearance) + ' m spare</span>' +
@@ -2917,13 +2941,29 @@
                     anchor + '" fill="var(--muted-55)">' + pad2(h) + '</text>';
             }).join('');
 
+            // Naming the two limits in the same words the result panel uses, so the
+            // dashed lines are read rather than guessed at.
+            let key = '';
+            if (limits) {
+                const rows = [];
+                if (limits.caution > lo && limits.caution < hi) {
+                    rows.push('<span><i></i>Above <b>' + fmtMetres(limits.caution) +
+                        ' m</b> of tide you do not fit at all</span>');
+                }
+                if (limits.safe > lo && limits.safe < hi) {
+                    rows.push('<span><i class="safe"></i>Below <b>' + fmtMetres(limits.safe) +
+                        ' m</b> you have ' + fmtMetres(SAFE_SPARE_M) + ' m spare</span>');
+                }
+                if (rows.length) key = '<div class="curve-key">' + rows.join('') + '</div>';
+            }
+
             return '<svg class="curve" viewBox="0 0 ' + W + ' ' + (H + LABELS) +
                 '" role="img" aria-label="Tide curve for ' + escapeHtml(fmtDayShort(day.date)) + '">' +
                 bands + limitLines +
                 '<polyline points="' + points + '" fill="none" stroke="var(--navy)" stroke-width="2.2" ' +
                     'stroke-linejoin="round" stroke-linecap="round"></polyline>' +
                 nowLine + hours +
-            '</svg>';
+            '</svg>' + key;
         }
 
         function renderBest() {
@@ -3101,7 +3141,7 @@
             if (required() === null) { host.innerHTML = ''; return; }
             const key = ui.expandedDate;
             const day = (key && ui.forecast.find(d => fmtDateValue(d.date) === key)) || ui.selectedDay;
-            host.innerHTML = day ? renderDayDetail(day, false) : '';
+            host.innerHTML = day ? renderDayDetail(day, true) : '';
         }
 
         function renderControls() {
@@ -3450,12 +3490,6 @@
                     const [cy, cm, cd] = check.dataset.check.split('-').map(Number);
                     setDate(new Date(cy, cm - 1, cd));
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                    return;
-                }
-
-                if (e.target.closest('[data-collapse]')) {
-                    ui.expandedDate = null;
-                    renderDays();
                     return;
                 }
 
