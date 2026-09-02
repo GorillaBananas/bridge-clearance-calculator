@@ -346,6 +346,7 @@
         .result.danger .result-rule { background: rgba(255,255,255,0.30); }
 
         .result-detail { font-size: 13px; line-height: 1.5; }
+        .result-detail .clause { display: block; }
 
         .limits {
             padding: 11px 14px;
@@ -601,6 +602,262 @@
 
         .busy { opacity: 0.55; transition: opacity 0.15s; }
 
+        /* Elements that belong to the wide layout only. */
+        .masthead-aside, .main-head, .week, .wide-pair, .rail-limits, .legend.wide { display: none; }
+        .result-figure.when, .result-strip-pill { display: none; }
+
+        /* ------------------------------------------------------------- desktop
+
+           One layout at two widths. The setup panel becomes the left rail, the
+           day list gives way to a week grid on a clock, and picking a day drops
+           its curve underneath. Nothing moves behind an accordion.
+           ------------------------------------------------------------------ */
+        @media (min-width: 1000px) {
+            body { padding: 0; }
+
+            .shell {
+                max-width: 1180px;
+                display: grid;
+                grid-template-columns: 340px minmax(0, 1fr);
+                grid-template-areas: "head head" "rail main";
+                align-items: start;
+                /* The rail panel is sticky, so its column is painted here instead;
+                   otherwise the navy stops wherever the panel happens to end. */
+                background: linear-gradient(to right, var(--navy) 0 340px, transparent 340px);
+            }
+
+            .masthead {
+                grid-area: head;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 28px;
+                padding: 26px 28px 28px;
+            }
+            .masthead > .masthead-rule,
+            .masthead > .gap-now { display: none; }
+            .masthead-top { flex: 0 1 auto; align-items: center; gap: 12px; }
+            .masthead-logo { height: 42px; }
+            .masthead-names { flex: 0 1 auto; }
+            .masthead-title { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+            .beta-tag { font-size: 14px; }
+            .masthead-where { font-size: 16px; }
+            .masthead-info { display: none; }
+            .masthead-blurb { max-width: 640px; font-size: 15px; line-height: 1.6; }
+
+            /* The blurb has to sit under the title, not beside the pills. */
+            .masthead {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas: "title aside" "blurb aside";
+                row-gap: 12px;
+            }
+            .masthead-top { grid-area: title; }
+            .masthead-blurb { grid-area: blurb; }
+            .masthead-aside {
+                grid-area: aside;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-end;
+            }
+            .pills { display: flex; gap: 8px; align-items: center; }
+            .pill {
+                padding: 7px 12px;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.08);
+                font-size: 13px;
+                color: var(--on-navy-84);
+                white-space: nowrap;
+            }
+            .pill.outline { background: none; border: 1px solid rgba(255,255,255,0.22); color: var(--paper); font-weight: 600; }
+            .aside-links { display: flex; gap: 16px; font-size: 13px; }
+            .aside-links a { color: var(--on-navy-84); }
+
+            /* ------------------------------------------------------------ rail */
+
+            .setup {
+                grid-area: rail;
+                position: sticky;
+                top: 0;
+                margin: 0;
+                border-radius: 0;
+                background: var(--navy);
+                color: var(--paper);
+                padding: 24px;
+                gap: 20px;
+                min-height: calc(100vh - 160px);
+            }
+            .setup .label { color: var(--on-navy-72); }
+            .setup .help, .setup .field-note { color: var(--on-navy); }
+            .setup .inset { background: rgba(255,255,255,0.07); }
+            .setup .inset-btn { background: rgba(255,255,255,0.08); color: var(--paper); }
+            .setup .inset-btn.wide { color: var(--on-navy-84); }
+            .setup .inset-readout .secondary { color: var(--on-navy); }
+            .setup .segmented { background: rgba(255,255,255,0.07); }
+            .setup .segmented button { color: var(--on-navy-84); }
+            .setup .segmented button[aria-pressed="true"] { background: var(--paper); color: var(--navy); }
+            .setup .chips button { background: rgba(255,255,255,0.07); color: var(--on-navy-84); }
+            .setup .chips button[aria-pressed="true"] { background: var(--paper); color: var(--navy); }
+            .setup .inset-readout.figure { font-size: 26px; }
+            .setup .inset-readout .primary { font-size: 15px; white-space: nowrap; }
+            .setup .inset-readout .secondary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .setup .inset-btn { width: 32px; height: 40px; }
+            .setup .inset-btn.step { width: 48px; height: 44px; font-size: 22px; }
+            .setup .segmented button { height: 44px; }
+
+            .rail-limits {
+                display: block;
+                margin-top: auto;
+                padding: 14px 16px;
+                border-radius: 16px;
+                background: rgba(255,255,255,0.07);
+                font-size: 14px;
+                line-height: 1.5;
+                color: var(--on-navy-84);
+            }
+            .rail-limits b { font-weight: 700; }
+            .rail-limits .t-safe { color: var(--safe); }
+            .rail-limits .t-caution { color: var(--caution); }
+
+            /* ------------------------------------------------------------ main */
+
+            .main {
+                grid-area: main;
+                padding: 26px 28px 0;
+                display: flex;
+                flex-direction: column;
+                gap: 18px;
+                min-width: 0;
+            }
+
+            .main-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+            .main-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+            .legend.wide { display: flex; gap: 16px; padding: 6px 0 0; font-size: 14px; color: var(--muted-48); }
+            .ranges { display: flex; gap: 8px; flex: 0 0 auto; }
+            .ranges button {
+                padding: 10px 14px;
+                border-radius: 12px;
+                background: var(--card);
+                font-size: 14px;
+                color: var(--muted-45);
+            }
+            .ranges button[aria-pressed="true"] { font-weight: 600; color: var(--navy); }
+
+            .result-wrap, .provenance, .best, .caveats { margin: 0; }
+            .error-panel { margin: 0; }
+            .days, .days-head { display: none; }
+
+            /* The result becomes a strip: figures on one line, detail beneath. */
+            .result { padding: 18px 22px; }
+            .result-head { display: none; }
+            /* Wraps rather than pushing the status pill off the edge at the
+               narrow end of the wide layout. */
+            .result-figures { align-items: center; gap: 14px 28px; flex-wrap: wrap; }
+            .result-figure { flex: 0 0 auto; }
+            .result-figure .value { font-size: 38px; }
+            .result-figure .caption {
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                order: -1;
+            }
+            .result-figure.when { display: flex; white-space: nowrap; }
+            .result-strip-pill {
+                display: inline-block;
+                align-self: center;
+                font-size: 13px; font-weight: 700;
+                letter-spacing: 0.14em; text-transform: uppercase;
+                padding: 5px 12px; border-radius: 999px;
+                background: rgba(8,36,15,0.14);
+                margin-left: auto;
+            }
+            .result.danger .result-strip-pill { background: rgba(255,255,255,0.20); }
+            .result-figure.when .value { font-size: 22px; font-weight: 700; }
+            .result-figure.when .caption { font-size: 14px; letter-spacing: 0; text-transform: none; font-weight: 400; order: 1; }
+            .result-divide { align-self: stretch; min-height: 56px; }
+            .result-strip-pill { margin-left: auto; }
+            .result-detail { display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; }
+            .result-detail .clause { display: inline; }
+
+            .limits { display: none; }
+
+            /* ------------------------------------------------------- week grid */
+
+            .week {
+                display: flex;
+                flex-direction: column;
+                background: var(--card);
+                border-radius: 18px;
+                padding: 18px 20px;
+            }
+            .week-scale {
+                display: flex;
+                justify-content: space-between;
+                padding-left: 120px;
+                padding-bottom: 6px;
+                font-size: 12px;
+                color: var(--muted-55);
+            }
+            .week-row {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                padding: 8px 0;
+                border-top: 1px solid var(--app-bg);
+                width: 100%;
+                text-align: left;
+            }
+            .week-row .name { width: 106px; flex: 0 0 auto; font-size: 15px; font-weight: 600; }
+            .week-row.today .name { font-weight: 700; }
+            .week-track {
+                flex: 1;
+                height: 38px;
+                border-radius: 9px;
+                background: var(--app-bg);
+                position: relative;
+                overflow: hidden;
+                min-width: 0;
+            }
+            .week-band { position: absolute; top: 0; bottom: 0; background: var(--caution); }
+            .week-band.core { background: var(--safe); }
+            .week-band-label {
+                position: absolute; top: 0; bottom: 0;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 12px; font-weight: 700;
+                color: var(--caution-ink);
+                font-variant-numeric: tabular-nums;
+                pointer-events: none;
+                white-space: nowrap;
+                overflow: hidden;
+            }
+            .week-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--navy); }
+            .week-empty { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 12px; font-size: 12.5px; color: var(--muted-55); }
+            .week-row[aria-pressed="true"] .week-track { outline: 2px solid var(--navy); outline-offset: 1px; }
+
+            /* --------------------------------------------------- curve + best */
+
+            .wide-pair { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+            .day-card {
+                background: var(--card);
+                border-radius: 18px;
+                padding: 4px 4px 8px;
+                min-width: 0;
+            }
+            .day-card:empty { display: none; }
+            .day-card .day-detail { padding: 14px 18px 16px; }
+            .day-card .day-detail-head .close { display: none; }
+            .day-card .detail-actions { display: none; }
+            .best { align-self: start; }
+
+            .site-footer { padding: 18px 0 26px; }
+        }
+
+        @media (min-width: 1000px) and (max-width: 1180px) {
+            .shell { max-width: 100%; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; animation: none !important; }
         }
@@ -617,6 +874,18 @@
                     <span class="masthead-where">Tamaki Drive &middot; Outboard Boating Club</span>
                 </div>
                 <a class="masthead-info" href="#caveats" aria-label="How this works, and its limits">i</a>
+            </div>
+
+            <div class="masthead-aside">
+                <div class="pills">
+                    <span class="pill" id="pillSource">LINZ data</span>
+                    <span class="pill" id="pillOffline">Offline copy saved</span>
+                    <button type="button" class="pill outline" id="refreshBtnWide">Refresh</button>
+                </div>
+                <div class="aside-links">
+                    <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC bridge gap table (PDF)</a>
+                    <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
+                </div>
             </div>
 
             <p class="masthead-blurb">Safe passage times under the Tamaki Drive bridge using LINZ tide
@@ -693,7 +962,25 @@
                 <p class="help">Waterline to your highest point &mdash; mast, aerial, radar &mdash; with the boat
                     unladen. Remembered next visit.</p>
             </div>
+
+            <!-- Shown only in the desktop rail, where the design puts the derived
+                 limits beside the inputs they come from. -->
+            <div class="rail-limits" id="railLimits"></div>
         </section>
+
+        <div class="main">
+
+        <div class="main-head">
+            <div>
+                <h1 class="main-title" id="mainTitle">Passage windows</h1>
+                <div class="legend wide" id="legendWide"></div>
+            </div>
+            <div class="ranges">
+                <button type="button" data-range="week" aria-pressed="true">This week</button>
+                <button type="button" data-range="fortnight" aria-pressed="false">Next 14 days</button>
+                <button type="button" data-range="pick">Pick a date</button>
+            </div>
+        </div>
 
         <div class="error-panel hidden" id="errorPanel" role="alert">
             <span class="title">Tide data unavailable</span>
@@ -724,7 +1011,13 @@
 
         <section class="days" id="days" aria-labelledby="daysHeading"></section>
 
-        <section class="best hidden" id="best"></section>
+        <!-- The desktop week grid. Same windows as the day rows, laid on a clock. -->
+        <section class="week" id="week" aria-labelledby="daysHeading"></section>
+
+        <div class="wide-pair">
+            <section class="day-card" id="dayCard"></section>
+            <section class="best hidden" id="best"></section>
+        </div>
 
         <section class="caveats" id="caveats">
             <h2>&#42; Beta &mdash; conditions and caveats</h2>
@@ -782,6 +1075,8 @@
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
             <span class="version" id="versionTag">v10.0</span>
         </footer>
+
+        </div><!-- /.main -->
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -2222,15 +2517,17 @@
                             '<span class="result-pill">Gap only</span>' +
                         '</div>' +
                         '<div class="result-figures">' +
+                            stripWhen(when) +
                             '<div class="result-figure">' +
                                 '<span class="value num">' + fmtMetres(gap) + '<span class="unit"> m</span></span>' +
                                 '<span class="caption">Gap under the ' + spanCaps + ' span</span>' +
                             '</div>' +
+                            '<span class="result-strip-pill">Gap only</span>' +
                         '</div>' +
                         '<div class="result-rule"></div>' +
-                        '<span class="result-detail"><b>Tide ' + fmtMetres(reading.height) + ' m</b>' +
-                            (dir ? ' ' + dir : '') +
-                            ' · enter your boat height above for a verdict.</span>' +
+                        '<span class="result-detail"><span class="clause"><b>Tide ' +
+                            fmtMetres(reading.height) + ' m</b>' + (dir ? ' ' + dir : '') +
+                            ' · enter your boat height above for a verdict.</span></span>' +
                     '</div>';
                 return;
             }
@@ -2249,8 +2546,8 @@
                 const parts = [];
                 if (safeUntil) parts.push('safe until ' + fmtTimeWithDay(safeUntil, when));
                 if (closesAt) parts.push('closed from ' + fmtTimeWithDay(closesAt, when));
-                tail = parts.length ? ' · ' + parts.join(', ') : '';
-                tail = '<br><b>Tide ' + fmtMetres(reading.height) + ' m</b>' + (dir ? ' ' + dir : '') + tail;
+                tail = '<span class="clause"><b>Tide ' + fmtMetres(reading.height) + ' m</b>' +
+                    (dir ? ' ' + dir : '') + (parts.length ? ' · ' + parts.join(', ') : '') + '</span>';
             }
 
             const secondFigure = status === 'danger'
@@ -2264,6 +2561,7 @@
                         '<span class="result-pill">' + STATUS_WORD[status] + '</span>' +
                     '</div>' +
                     '<div class="result-figures">' +
+                        stripWhen(when) +
                         '<div class="result-figure">' +
                             '<span class="value num">' + fmtMetres(gap) + '<span class="unit"> m</span></span>' +
                             '<span class="caption">Gap under the ' + spanCaps + ' span</span>' +
@@ -2273,10 +2571,14 @@
                             '<span class="value num">' + secondFigure.value + '<span class="unit"> m</span></span>' +
                             '<span class="caption">' + secondFigure.caption + '</span>' +
                         '</div>' +
+                        '<span class="result-strip-pill">' + STATUS_WORD[status] + '</span>' +
                     '</div>' +
                     '<div class="result-rule"></div>' +
-                    '<span class="result-detail"><b>Required ' + fmtMetres(need) + ' m</b> — boat ' +
-                        fmtMetres(ui.boat) + ' m + ' + fmtMetres(ui.margin) + ' m margin' + tail + '</span>' +
+                    '<span class="result-detail">' +
+                        '<span class="clause"><b>Required ' + fmtMetres(need) + ' m</b> — boat ' +
+                            fmtMetres(ui.boat) + ' m + ' + fmtMetres(ui.margin) + ' m margin</span>' +
+                        tail +
+                    '</span>' +
                 '</div>' +
                 renderLimitsLine(reading, limits) +
                 (status === 'danger' ? renderNextPassage(when) : '');
@@ -2285,9 +2587,9 @@
         // The shortfall panel never prints a spare figure: it says how much too tall
         // the boat is, and what the tide has to do about it.
         function renderShortfallTail(when, limits) {
-            return '<br>Waiting on the tide: it must fall to ' + fmtMetres(limits.caution) +
+            return '<span class="clause">Waiting on the tide: it must fall to ' + fmtMetres(limits.caution) +
                 ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m for ' +
-                fmtMetres(SAFE_SPARE_M) + ' m spare.';
+                fmtMetres(SAFE_SPARE_M) + ' m spare.</span>';
         }
 
         function renderLimitsLine(reading, limits) {
@@ -2583,6 +2885,147 @@
                     fmtDuration(best.mins * 60000) + '</span>';
         }
 
+        // On the wide layout the result becomes a strip and its header row is
+        // hidden, so the moment being answered moves in beside the figures.
+        function stripWhen(when) {
+            return '<div class="result-figure when">' +
+                '<span class="value num">' + fmtTime(when) + '</span>' +
+                '<span class="caption">' + escapeHtml(fmtDayShort(when)) + '</span>' +
+            '</div>';
+        }
+
+        function renderWide() {
+            const first = ui.forecast[0], last = ui.forecast[ui.forecast.length - 1];
+            if (first && last) {
+                $('mainTitle').textContent = 'Passage windows, ' +
+                    first.date.getDate() + ' – ' + last.date.getDate() + ' ' + MONTHS[last.date.getMonth()];
+            }
+
+            $('legendWide').innerHTML =
+                '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) + ' m or more spare</span>' +
+                '<span><span class="dot caution"></span>Caution &mdash; under ' + fmtMetres(SAFE_SPARE_M) + ' m spare</span>' +
+                '<span><span class="dot danger"></span>Danger &mdash; no clearance</span>';
+
+            document.querySelectorAll('.ranges button[data-range]').forEach(btn => {
+                if (btn.dataset.range === 'pick') return;
+                const active = (btn.dataset.range === 'fortnight') === (ui.dayCount === FORTNIGHT_DAYS);
+                btn.setAttribute('aria-pressed', String(active));
+            });
+
+            $('pillSource').textContent = ui.source === 'bundled'
+                ? 'LINZ data · bundled'
+                : ui.source === 'cache' ? 'LINZ data · saved copy' : 'LINZ data · fetched';
+            $('pillOffline').textContent = TideDataService.getCacheStatus().hasCachedData
+                ? 'Offline copy saved' : 'No offline copy yet';
+
+            renderRailLimits();
+            renderWeek();
+            renderDayCard();
+        }
+
+        function renderRailLimits() {
+            const el = $('railLimits');
+            const limits = tideLimits();
+            if (!limits) {
+                el.textContent = 'Enter your boat height to see the tide levels this passage turns on.';
+                return;
+            }
+            const now = new Date();
+            const reading = tideAtMoment(findDay(now), now);
+            const nowPart = reading
+                ? ' Right now it is ' + fmtMetres(reading.height) + ' m' +
+                  (tideDirection(reading) ? ' and ' + tideDirection(reading) : '') + '.'
+                : '';
+            el.innerHTML = limits.safe >= 0
+                ? 'Safe while the tide is under <b class="t-safe">' + fmtMetres(limits.safe) +
+                  ' m</b>, caution up to <b class="t-caution">' + fmtMetres(limits.caution) +
+                  ' m</b>, danger above.' + nowPart
+                : 'This boat never has ' + fmtMetres(SAFE_SPARE_M) + ' m of spare under the ' +
+                  escapeHtml(selectedSpanName) + ' span. It fits at all only while the tide is under <b class="t-caution">' +
+                  fmtMetres(limits.caution) + ' m</b>.' + nowPart;
+        }
+
+        // The same windows as the day rows, laid on a 24-hour clock: a caution band
+        // with the safe core inside it, positioned by the fraction of the day each
+        // covers. A window running past midnight is clipped at the day's edge; it is
+        // drawn again on the row it continues into.
+        function renderWeek() {
+            const host = $('week');
+
+            if (required() === null) {
+                host.innerHTML = '<div class="week-scale"><span>Enter your boat height to see passage windows.</span></div>';
+                return;
+            }
+
+            const scale = '<div class="week-scale">' +
+                ['00:00', '06:00', '12:00', '18:00', '24:00'].map(h => '<span>' + h + '</span>').join('') +
+                '</div>';
+
+            const now = new Date();
+
+            const rows = ui.forecast.map(day => {
+                const isToday = dayDelta(day.date, ui.today) === 0;
+                const key = fmtDateValue(day.date);
+                const dayStart = startOfDay(day.date).getTime();
+                const pct = t => Math.max(0, Math.min(100, ((t - dayStart) / 86400000) * 100));
+
+                let bands = '';
+                if (day.unavailable) {
+                    bands = '<span class="week-empty">No published predictions</span>';
+                } else if (windowsToShow(day).length === 0) {
+                    bands = '<span class="week-empty">' +
+                        (day.windows.length ? 'No window over an hour' : 'No passage this day') + '</span>';
+                } else {
+                    for (const win of windowsToShow(day)) {
+                        const left = pct(win.start.time.getTime());
+                        const right = pct(win.end.time.getTime() + 10 * 60000);
+                        const width = right - left;
+                        if (width <= 0) continue;
+
+                        bands += '<span class="week-band" style="left:' + left.toFixed(2) + '%; width:' +
+                            width.toFixed(2) + '%"></span>';
+
+                        if (win.safeStart) {
+                            const sl = pct(win.safeStart.time.getTime());
+                            const sr = pct(win.safeEnd.time.getTime() + 10 * 60000);
+                            if (sr > sl) {
+                                bands += '<span class="week-band core" style="left:' + sl.toFixed(2) +
+                                    '%; width:' + (sr - sl).toFixed(2) + '%"></span>';
+                            }
+                        }
+
+                        if (width >= 8) {
+                            bands += '<span class="week-band-label" style="left:' + left.toFixed(2) + '%; width:' +
+                                width.toFixed(2) + '%">' + fmtTime(win.start.time) + '–' +
+                                fmtTime(win.end.time) + '</span>';
+                        }
+                    }
+                }
+
+                if (isToday) {
+                    bands += '<span class="week-now" style="left:' + pct(now.getTime()).toFixed(2) + '%"></span>';
+                }
+
+                return '<button type="button" class="week-row' + (isToday ? ' today' : '') +
+                    '" data-date="' + key + '" aria-pressed="' + (ui.expandedDate === key) + '">' +
+                    '<span class="name">' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
+                    '<span class="week-track">' + bands + '</span>' +
+                '</button>';
+            }).join('');
+
+            host.innerHTML = scale + rows;
+        }
+
+        // On the wide layout the day detail drops into its own card rather than
+        // expanding a row, defaulting to the day being checked.
+        function renderDayCard() {
+            const host = $('dayCard');
+            if (required() === null) { host.innerHTML = ''; return; }
+            const key = ui.expandedDate;
+            const day = (key && ui.forecast.find(d => fmtDateValue(d.date) === key)) || ui.selectedDay;
+            host.innerHTML = day ? renderDayDetail(day) : '';
+        }
+
         function renderControls() {
             $('dateReadout').textContent = fmtDayShort(ui.date);
             $('dateRelative').textContent = relativeDayLabel(ui.date);
@@ -2612,6 +3055,7 @@
             renderProvenance();
             renderDays();
             renderBest();
+            renderWide();
         }
 
         // ------------------------------------------------------------ data loading
@@ -2653,7 +3097,7 @@
             } catch (err) {
                 const message = (err && err.userMessage) || (err && err.message) ||
                     'Could not load tide predictions.';
-                showErrorPanel(message, TideDataService.getCacheStatus().years.length > 0);
+                showErrorPanel(message, TideDataService.getCacheStatus().hasCachedData);
             } finally {
                 ui.busy = false;
                 document.body.classList.remove('busy');
@@ -2776,6 +3220,17 @@
             button.addEventListener('click', action);
         }
 
+        // showPicker is the only way to open a native date picker from a button;
+        // where it is missing, focusing the input is the best available fallback.
+        function openDatePicker() {
+            const input = $('tideDate');
+            try {
+                if (typeof input.showPicker === 'function') { input.showPicker(); return; }
+            } catch (e) { /* not allowed in this context */ }
+            input.focus();
+            input.click();
+        }
+
         function wire() {
             $('datePrev').addEventListener('click', () => setDate(addDays(ui.date, -1)));
             $('dateNext').addEventListener('click', () => setDate(addDays(ui.date, 1)));
@@ -2847,7 +3302,26 @@
                 renderDays();
             });
 
+            $('week').addEventListener('click', e => {
+                const row = e.target.closest('.week-row[data-date]');
+                if (!row) return;
+                ui.expandedDate = ui.expandedDate === row.dataset.date ? null : row.dataset.date;
+                renderWeek();
+                renderDayCard();
+            });
+
+            document.querySelector('.ranges').addEventListener('click', e => {
+                const btn = e.target.closest('button[data-range]');
+                if (!btn) return;
+                if (btn.dataset.range === 'pick') { openDatePicker(); return; }
+                const wanted = btn.dataset.range === 'fortnight' ? FORTNIGHT_DAYS : WEEK_DAYS;
+                if (wanted === ui.dayCount) return;
+                ui.dayCount = wanted;
+                recompute(false);
+            });
+
             $('refreshBtn').addEventListener('click', () => recompute(true));
+            $('refreshBtnWide').addEventListener('click', () => recompute(true));
             $('errorRetry').addEventListener('click', () => recompute(true));
             $('errorCached').addEventListener('click', () => recompute(false));
 
