@@ -987,7 +987,9 @@
                     <button type="button" class="inset-btn step" data-step="margin" data-delta="1" aria-label="More safety margin">+</button>
                 </div>
                 <div class="chips" id="marginChips"></div>
-                <p class="help">Clearance you want left above the boat. Steps of 0.05&nbsp;m; set 0 to see the bare gap.</p>
+                <p class="help">Clearance you want left above the boat. Steps of 0.05&nbsp;m; set 0 to see
+                    the bare gap. A window is only called <b>safe</b> once there is a further
+                    0.50&nbsp;m on top of this &mdash; <a href="#caveats">why</a>.</p>
             </div>
 
             <div class="field">
@@ -1088,6 +1090,21 @@
                 <p>A window is shown as <b>safe</b> only where at least 0.50&nbsp;m of spare remains,
                     <b>caution</b> where the boat fits with less than that, and <b>danger</b> where it does
                     not fit at all.</p>
+            </div>
+
+            <div>
+                <h3>The 0.50&nbsp;m for &ldquo;safe&rdquo; is on top of your safety margin</h3>
+                <p>These are two separate cushions, and they add up. Your <b>required height</b> is your
+                    boat plus the margin you set. <b>Spare</b> is whatever is left above that. The page
+                    calls a moment safe only once 0.50&nbsp;m of spare remains &mdash; it does not count
+                    your margin towards that 0.50&nbsp;m.</p>
+                <p>So with a 3.90&nbsp;m boat and a 0.30&nbsp;m margin: you require 4.20&nbsp;m and fit at
+                    all at a 4.20&nbsp;m gap, but the page only calls it safe at 4.70&nbsp;m &mdash;
+                    0.80&nbsp;m above the boat itself. Raising your margin raises both figures. It does not
+                    replace the 0.50&nbsp;m.</p>
+                <p>If your margin already reflects the cushion you want, read <b>caution</b> as &ldquo;fits,
+                    by your own margin&rdquo; rather than as a warning to stay put, and use the spare figure
+                    itself to judge.</p>
             </div>
 
             <div>
@@ -2612,7 +2629,7 @@
 
             const secondFigure = status === 'danger'
                 ? { value: fmtMetres(spare), caption: 'Short of what you need' }
-                : { value: fmtMetres(spare), caption: 'Spare above your boat' };
+                : { value: fmtMetres(spare), caption: 'Spare over what you need' };
 
             wrap.innerHTML =
                 '<div class="result ' + status + '">' +
@@ -2648,8 +2665,8 @@
         // the boat is, and what the tide has to do about it.
         function renderShortfallTail(when, limits) {
             return '<span class="clause">Waiting on the tide: it must fall to ' + fmtMetres(limits.caution) +
-                ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m for ' +
-                fmtMetres(SAFE_SPARE_M) + ' m spare.</span>';
+                ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m to be ' +
+                fmtMetres(SAFE_SPARE_M) + ' m over what you need.</span>';
         }
 
         function renderLimitsLine(reading, limits) {
@@ -2662,7 +2679,7 @@
                 : (limits.caution >= 0
                     ? 'Caution while the tide is under ' + fmtMetres(limits.caution) +
                       ' m, danger above. This boat never gets ' + fmtMetres(SAFE_SPARE_M) +
-                      ' m of spare under this span.'
+                      ' m above its required height under this span.'
                     : 'This boat does not fit under the ' + escapeHtml(selectedSpanName) +
                       ' span at any tide.');
             return '<div class="limits">' + lead + ' Now ' + fmtMetres(reading.height) + ' m' +
@@ -2711,7 +2728,8 @@
 
             const legend =
                 '<div class="legend">' +
-                    '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) + ' m spare</span>' +
+                    '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) +
+                        ' m over required</span>' +
                     '<span><span class="dot caution"></span>Caution</span>' +
                     '<span><span class="dot danger"></span>Danger</span>' +
                 '</div>';
@@ -2831,7 +2849,8 @@
                 ? 'Safe ' + fmtTime(win.safeStart.time) + ' – ' +
                   fmtTimeWithDay(win.safeEnd.time, win.start.time) +
                   ' · caution either side of that'
-                : 'Caution throughout: this window never reaches ' + fmtMetres(SAFE_SPARE_M) + ' m of spare.';
+                : 'Caution throughout: this window never gets ' + fmtMetres(SAFE_SPARE_M) +
+                  ' m above your required height.';
 
             return '<div class="detail-window">' +
                 '<div class="detail-window-head">' +
@@ -2930,7 +2949,7 @@
                 }
                 if (limits.safe > lo && limits.safe < hi) {
                     rows.push('<span><i class="safe"></i>Below <b>' + fmtMetres(limits.safe) +
-                        ' m</b> you have ' + fmtMetres(SAFE_SPARE_M) + ' m spare</span>');
+                        ' m</b> you are ' + fmtMetres(SAFE_SPARE_M) + ' m over required</span>');
                 }
                 if (rows.length) key = '<div class="curve-key">' + rows.join('') + '</div>';
             }
@@ -2984,9 +3003,11 @@
             }
 
             $('legendWide').innerHTML =
-                '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) + ' m or more spare</span>' +
-                '<span><span class="dot caution"></span>Caution &mdash; under ' + fmtMetres(SAFE_SPARE_M) + ' m spare</span>' +
-                '<span><span class="dot danger"></span>Danger &mdash; no clearance</span>';
+                '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) +
+                    ' m or more over your required height</span>' +
+                '<span><span class="dot caution"></span>Caution &mdash; fits, with less than ' +
+                    fmtMetres(SAFE_SPARE_M) + ' m over</span>' +
+                '<span><span class="dot danger"></span>Danger &mdash; does not fit</span>';
 
             document.querySelectorAll('.ranges button[data-range]').forEach(btn => {
                 if (btn.dataset.range === 'pick') return;
@@ -3022,7 +3043,7 @@
                 ? 'Safe while the tide is under <b class="t-safe">' + fmtMetres(limits.safe) +
                   ' m</b>, caution up to <b class="t-caution">' + fmtMetres(limits.caution) +
                   ' m</b>, danger above.' + nowPart
-                : 'This boat never has ' + fmtMetres(SAFE_SPARE_M) + ' m of spare under the ' +
+                : 'This boat never gets ' + fmtMetres(SAFE_SPARE_M) + ' m over required under the ' +
                   escapeHtml(selectedSpanName) + ' span. It fits at all only while the tide is under <b class="t-caution">' +
                   fmtMetres(limits.caution) + ' m</b>.' + nowPart;
         }
