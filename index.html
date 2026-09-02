@@ -3060,7 +3060,13 @@
 
         // ------------------------------------------------------------ data loading
 
+        // Tapping the date arrows faster than a load completes would otherwise let
+        // an earlier result land after a later one and leave the page showing the
+        // wrong day. Only the newest request is allowed to write.
+        let recomputeToken = 0;
+
         async function recompute(forceRefresh) {
+            const token = ++recomputeToken;
             ui.busy = true;
             document.body.classList.add('busy');
             hideErrorPanel();
@@ -3070,11 +3076,14 @@
             try {
                 // One day beyond the range, so a window running past midnight on the
                 // last visible day can still be joined to its tail.
-                ui.forecastAll = await computeDayForecast(
+                const days = await computeDayForecast(
                     ui.today, ui.dayCount + 1, selectedSpanClearance, boat, ui.margin, !!forceRefresh
                 );
-                stitchWindowsAcrossMidnight(ui.forecastAll);
-                ui.forecast = ui.forecastAll.slice(0, ui.dayCount);
+                if (token !== recomputeToken) return;
+
+                stitchWindowsAcrossMidnight(days);
+                ui.forecastAll = days;
+                ui.forecast = days.slice(0, ui.dayCount);
 
                 const inRange = findDay(ui.date);
                 if (inRange) {
@@ -3083,6 +3092,7 @@
                     const pair = await computeDayForecast(
                         ui.date, 2, selectedSpanClearance, boat, ui.margin, false
                     );
+                    if (token !== recomputeToken) return;
                     stitchWindowsAcrossMidnight(pair);
                     ui.selectedDay = pair[0];
                 }
@@ -3095,13 +3105,18 @@
                     showToast(ui.stale ? 'Could not refresh — showing the saved copy' : 'Tide data refreshed');
                 }
             } catch (err) {
+                if (token !== recomputeToken) return;
                 const message = (err && err.userMessage) || (err && err.message) ||
                     'Could not load tide predictions.';
                 showErrorPanel(message, TideDataService.getCacheStatus().hasCachedData);
             } finally {
-                ui.busy = false;
-                document.body.classList.remove('busy');
-                renderAll();
+                // A superseded request leaves the busy state and the render to the
+                // one that overtook it.
+                if (token === recomputeToken) {
+                    ui.busy = false;
+                    document.body.classList.remove('busy');
+                    renderAll();
+                }
             }
         }
 
