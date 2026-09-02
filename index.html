@@ -40,1399 +40,691 @@
     
     <title>OBC Bridge Clearance Calculator</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ------------------------------------------------------------------
+           Design tokens.
+
+           The design is specified in oklch. Every token is declared twice: a
+           hex approximation first, then the exact oklch inside @supports, so
+           an older browser on a boat still gets a page that reads correctly
+           rather than one with unpainted colours.
+           ------------------------------------------------------------------ */
+        :root {
+            --navy: #0A1628;
+            --paper: #F7F5F0;
+            --app-bg: #EFECE5;
+            --recessed: #E6E2D9;
+            --track: #E2DED5;
+            --card: #FFFFFF;
+
+            --safe: #56DB8F;
+            --safe-soft: #A8EABE;
+            --safe-softer: #CFF2DA;
+            --safe-deep: #005129;
+            --on-safe: #08240F;
+
+            --caution: #F8CA65;
+            --caution-ink: #4C2A00;
+            --caution-line: #A77F19;
+
+            --danger: #DA534F;
+            --danger-ink: #FFF4F2;
+            --danger-line: #BD413F;
+
+            --beta: #F5CB70;
+            --link: #0074A6;
+            --link-hover: #005080;
+
+            --muted: #58666D;
+            --muted-strong: #424F56;
+            --muted-45: #4B575F;
+            --muted-48: #536067;
+            --muted-55: #66747B;
+            --border: #CBDAE3;
+
+            --on-navy: #99AFBB;
+            --on-navy-72: #93A8B4;
+            --on-navy-76: #9FB5C1;
+            --on-navy-80: #B2C0C9;
+            --on-navy-84: #B8CFDB;
+
+            --tap: 46px;
+        }
+
+        @supports (color: oklch(0.8 0.16 155)) {
+            :root {
+                --safe: oklch(0.80 0.16 155);
+                --safe-soft: oklch(0.88 0.09 155);
+                --safe-softer: oklch(0.93 0.05 155);
+                --safe-deep: oklch(0.38 0.10 155);
+                --caution: oklch(0.86 0.13 85);
+                --caution-ink: oklch(0.32 0.08 70);
+                --caution-line: oklch(0.62 0.12 85);
+                --danger: oklch(0.62 0.17 25);
+                --danger-ink: oklch(0.98 0.02 25);
+                --danger-line: oklch(0.55 0.16 25);
+                --beta: oklch(0.86 0.12 85);
+                --link: oklch(0.52 0.13 232);
+                --link-hover: oklch(0.40 0.13 232);
+                --muted: oklch(0.50 0.02 232);
+                --muted-strong: oklch(0.42 0.02 232);
+                --muted-45: oklch(0.45 0.02 232);
+                --muted-48: oklch(0.48 0.02 232);
+                --muted-55: oklch(0.55 0.02 232);
+                --border: oklch(0.88 0.02 232);
+                --on-navy: oklch(0.74 0.03 232);
+                --on-navy-72: oklch(0.72 0.03 232);
+                --on-navy-76: oklch(0.76 0.03 232);
+                --on-navy-80: oklch(0.80 0.02 232);
+                --on-navy-84: oklch(0.84 0.03 232);
+            }
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { -webkit-text-size-adjust: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                         'Helvetica Neue', Arial, sans-serif;
+            background: var(--app-bg);
+            color: var(--navy);
+            font-size: 14px;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* The design's uppercase micro-labels. Archivo Narrow in the mock; the
+           system stack with tighter tracking here, so the page ships without a
+           webfont dependency. */
+        .label {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .num { font-variant-numeric: tabular-nums; }
+        .unit { font-size: 0.44em; font-weight: 600; letter-spacing: 0; }
+
+        a { color: var(--link); }
+        a:hover { color: var(--link-hover); }
+
+        button {
+            font: inherit;
+            color: inherit;
+            background: none;
+            border: 0;
+            cursor: pointer;
             -webkit-tap-highlight-color: transparent;
         }
 
-        :root {
-            --ocean-dark: #0A1628;
-            --ocean-mid: #1B3A5F;
-            --ocean-light: #2E5C8A;
-            --sky-light: #5BA3D0;
-            --sky-bright: #8EC5E8;
-            --foam: #B8E6F9;
-            --sand: #F4E8D8;
-            --sunset: #FF6B6B;
-            --sunrise: #FFD93D;
-            --mint: #6BCF7F;
-        }
+        :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-            background: linear-gradient(135deg, var(--ocean-dark) 0%, var(--ocean-mid) 50%, var(--ocean-light) 100%);
-            min-height: 100vh;
-            color: white;
-            overflow-x: hidden;
-            position: relative;
-        }
+        .shell { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
 
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                radial-gradient(circle at 20% 50%, rgba(91, 163, 208, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(142, 197, 232, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 40% 20%, rgba(107, 207, 127, 0.05) 0%, transparent 50%);
-            animation: drift 20s ease-in-out infinite alternate;
-            pointer-events: none;
-        }
+        /* ------------------------------------------------------------- header */
 
-        @keyframes drift {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(10px, 10px) scale(1.05); }
-        }
-
-        .app-container {
-            max-width: 440px;
-            margin: 0 auto;
-            min-height: 100vh;
-            position: relative;
-            padding: 0 16px;
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-
-        .hero-header {
-            padding: 60px 0 20px;
-            text-align: center;
-            position: relative;
-        }
-
-        .hero-icon {
-            font-size: 72px;
-            margin-bottom: 16px;
-            display: inline-block;
-            animation: float 3s ease-in-out infinite;
-            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-8px); }
-        }
-
-        .hero-title {
-            font-size: 32px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, #FFFFFF 0%, var(--foam) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            line-height: 1.2;
-            padding: 0 8px;
-        }
-
-        .hero-subtitle {
-            font-size: 18px;
-            opacity: 0.85;
-            font-weight: 500;
-            letter-spacing: 0.3px;
-            margin-bottom: 12px;
-        }
-
-        .beta-notice {
-            background: rgba(255, 217, 61, 0.15);
-            border: 1px solid rgba(255, 217, 61, 0.3);
-            border-radius: 12px;
-            padding: 12px 16px;
-            margin: 16px 0 0 0;
-            font-size: 13px;
-            line-height: 1.5;
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .beta-notice strong {
-            color: var(--sunrise);
-            font-weight: 700;
-        }
-
-        .glass-card {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(40px);
-            -webkit-backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 24px;
-            margin: 20px 0;
-            padding: 24px;
-            box-shadow: 
-                0 8px 32px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.15);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            max-width: 100%;
-        }
-
-        .glass-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 
-                0 12px 48px rgba(0, 0, 0, 0.25),
-                inset 0 1px 0 rgba(255, 255, 255, 0.15);
-        }
-
-        .card-header {
+        .masthead {
+            background: var(--navy);
+            color: var(--paper);
+            padding: 14px 18px 18px;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 12px;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         }
 
-        .card-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 100%);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            flex-shrink: 0;
-        }
+        .masthead-top { display: flex; align-items: center; gap: 11px; }
+        .masthead-logo { flex: 0 0 auto; height: 38px; width: auto; object-fit: contain; }
+        .masthead-names { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 
-        .card-title {
-            font-size: 20px;
+        .masthead-title { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+        .beta-tag {
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: -0.3px;
+            letter-spacing: 0.14em;
+            vertical-align: 2px;
+            color: var(--beta);
+            text-decoration: none;
+        }
+        .beta-tag:hover { color: var(--beta); text-decoration: underline; }
+        .masthead-where { font-size: 12.5px; color: var(--on-navy-76); }
+
+        .masthead-info {
+            flex: 0 0 auto;
+            width: 34px; height: 34px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.09);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; font-weight: 600;
+            color: var(--on-navy-84);
+            text-decoration: none;
         }
 
-        .span-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        .masthead-blurb { font-size: 13px; line-height: 1.45; color: var(--on-navy-80); }
+        .masthead-rule { height: 1px; background: rgba(255,255,255,0.12); }
+
+        .gap-now { display: flex; flex-direction: column; gap: 3px; }
+        .gap-now .label { color: var(--on-navy-72); }
+        .gap-now-figure { font-size: 34px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+        .gap-now-figure .unit { font-size: 17px; }
+        .gap-now-when { font-size: 13.5px; color: var(--on-navy-80); }
+
+        /* --------------------------------------------------------- setup card */
+
+        .setup {
+            margin: 16px 14px 0;
+            background: var(--card);
+            border-radius: 22px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
             gap: 16px;
-            margin-bottom: 16px;
         }
 
-        .span-option {
-            background: rgba(255, 255, 255, 0.08);
-            border: 2px solid rgba(255, 255, 255, 0.15);
-            border-radius: 20px;
-            padding: 28px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
+        .field { display: flex; flex-direction: column; gap: 8px; }
+        .field-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .field-note { font-size: 12px; color: var(--muted-55); }
+        .help { font-size: 12px; line-height: 1.4; color: var(--muted); }
 
-        .span-option::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
+        .row { display: flex; gap: 10px; }
+        .row > .field:first-child { flex: 1.35; min-width: 0; }
+        .row > .field:last-child { flex: 1; min-width: 0; }
 
-        .span-option:hover::before {
-            opacity: 1;
-        }
-
-        .span-option.selected {
-            background: linear-gradient(135deg, var(--sky-bright) 0%, var(--sky-light) 100%);
-            border-color: var(--foam);
-            box-shadow: 0 8px 24px rgba(91, 163, 208, 0.4);
-        }
-
-        .span-option.selected::after {
-            content: '✓';
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 26px;
-            height: 26px;
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--sky-light);
-            border-radius: 50%;
+        /* A recessed group holding tap targets, per the design's inset controls */
+        .inset {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: 900;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            gap: 4px;
+            background: var(--app-bg);
+            padding: 4px;
+            border-radius: 14px;
         }
 
-        .span-label {
+        .inset-btn {
+            width: 36px;
+            height: var(--tap);
+            border-radius: 11px;
+            background: var(--card);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 19px;
+            color: var(--muted-strong);
+        }
+        .inset-btn:active { background: var(--recessed); }
+        .inset-btn.wide { width: auto; padding: 0 12px; font-size: 13px; font-weight: 600; color: var(--link); }
+        .inset-btn.step { width: var(--tap); font-size: 24px; }
+
+        .inset-readout {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+            display: block;
+            padding: 0;
+        }
+        .inset-readout .primary { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+        .inset-readout .secondary { font-size: 11.5px; color: var(--muted); }
+        .inset-readout.figure { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+        .inset-readout.figure .unit { font-size: 15px; }
+
+        /* The native pickers sit invisibly over their readouts, so a tap opens the
+           platform date/time UI and the keyboard is never needed. */
+        .picker-wrap { position: relative; flex: 1; min-width: 0; }
+        .picker-wrap > input {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            opacity: 0;
+            border: 0; padding: 0;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .segmented { display: flex; gap: 6px; background: var(--app-bg); padding: 4px; border-radius: 14px; }
+        .segmented button {
+            flex: 1;
+            height: var(--tap);
+            border-radius: 11px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px;
+            color: var(--muted-45);
+        }
+        .segmented button[aria-pressed="true"] { background: var(--navy); color: var(--paper); font-weight: 600; }
+
+        .chips { display: flex; gap: 6px; }
+        .chips button {
+            flex: 1;
+            padding: 10px 0;
+            text-align: center;
+            border-radius: 10px;
+            background: var(--app-bg);
+            font-size: 13px;
+            color: var(--muted-45);
+        }
+        .chips button[aria-pressed="true"] { background: var(--navy); color: var(--paper); font-weight: 600; }
+
+        /* ------------------------------------------------------------- result */
+
+        .result-wrap { margin: 12px 14px 0; display: flex; flex-direction: column; gap: 8px; }
+
+        .result {
+            padding: 16px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: var(--safe);
+            color: var(--on-safe);
+        }
+        .result.caution { background: var(--caution); color: var(--caution-ink); }
+        .result.danger { background: var(--danger); color: var(--danger-ink); }
+
+        .result-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .result-when { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+        .result-pill {
+            font-size: 12px; font-weight: 700;
+            letter-spacing: 0.14em; text-transform: uppercase;
+            padding: 4px 10px; border-radius: 999px;
+            background: rgba(8,36,15,0.14);
+            white-space: nowrap;
+        }
+        .result.danger .result-pill { background: rgba(255,255,255,0.20); }
+
+        .result-figures { display: flex; gap: 12px; }
+        .result-figure { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .result-figure .value { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+        .result-figure .value .unit { font-size: 18px; }
+        .result-figure .caption { font-size: 13px; }
+
+        .result-divide { width: 1px; background: rgba(8,36,15,0.18); }
+        .result-rule { height: 1px; background: rgba(8,36,15,0.18); }
+        .result.danger .result-divide,
+        .result.danger .result-rule { background: rgba(255,255,255,0.30); }
+
+        .result-detail { font-size: 13px; line-height: 1.5; }
+
+        .limits {
+            padding: 11px 14px;
+            border-radius: 14px;
+            background: var(--safe-softer);
+            font-size: 12.5px;
+            line-height: 1.45;
+            color: var(--muted-strong);
+        }
+
+        .next-passage {
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: var(--card);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .next-passage .headline { font-size: 16px; font-weight: 700; }
+        .next-passage .sub { font-size: 13px; color: var(--muted); }
+
+        /* --------------------------------------------------------- provenance */
+
+        .provenance {
+            margin: 14px 14px 0;
+            padding: 11px 14px;
+            border-radius: 14px;
+            background: var(--recessed);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .provenance .who { font-size: 13px; font-weight: 600; color: var(--navy); }
+        .provenance .when { font-size: 12px; line-height: 1.35; color: var(--muted-45); }
+        .provenance button {
+            flex: 0 0 auto;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--card);
             font-size: 13px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.8;
-            margin-bottom: 8px;
+            color: var(--link);
+        }
+        .provenance.stale { background: var(--caution); }
+        .provenance.stale .when { color: var(--caution-ink); }
+
+        /* ----------------------------------------------------------- day list */
+
+        .days-head {
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 16px 20px 0;
+            gap: 10px;
         }
 
-        .span-option.selected .span-label {
-            opacity: 1;
-            color: white;
+        .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .toggle-track {
+            width: 44px; height: 26px;
+            border-radius: 13px;
+            background: var(--track);
+            display: flex; align-items: center;
+            padding: 0 3px;
+            transition: background 0.15s;
         }
+        .toggle-knob { width: 20px; height: 20px; border-radius: 10px; background: var(--card); transition: transform 0.15s; }
+        .toggle[aria-pressed="true"] .toggle-track { background: var(--navy); }
+        .toggle[aria-pressed="true"] .toggle-knob { transform: translateX(18px); background: var(--paper); }
 
-        .span-value {
-            font-size: 36px;
-            font-weight: 900;
-            letter-spacing: -1px;
-        }
+        .days { margin: 8px 10px 0; display: flex; flex-direction: column; gap: 2px; }
 
-        .form-group {
-            margin-bottom: 20px;
-            max-width: 100%;
-        }
+        .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 14px 6px; font-size: 12px; color: var(--muted); }
+        .legend span { display: flex; align-items: center; gap: 6px; }
 
-        .form-group:last-child {
-            margin-bottom: 0;
-        }
+        .dot { width: 9px; height: 9px; border-radius: 5px; flex: 0 0 auto; }
+        .dot.safe { background: var(--safe); }
+        .dot.caution { background: var(--caution); }
+        .dot.danger { background: var(--danger); }
 
-        .form-label {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
-            opacity: 0.9;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .input-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 100%;
-        }
-
-        input[type="date"],
-        input[type="time"],
-        input[type="text"],
-        input[type="number"] {
-            width: 100%;
-            max-width: 100%;
-            min-width: 0;
-            padding: 16px 20px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1.5px solid rgba(255, 255, 255, 0.2);
+        .day {
+            display: flex;
+            gap: 12px;
+            padding: 10px 14px;
             border-radius: 16px;
-            color: white;
-            font-size: 18px;
-            font-weight: 500;
-            font-family: inherit;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-sizing: border-box;
-            -webkit-appearance: none;
-            appearance: none;
-            display: block;
-        }
-        
-        input[type="date"]::-webkit-datetime-edit {
-            max-width: calc(100% - 40px);
-            overflow: hidden;
-            text-overflow: clip;
-            display: inline-block;
+            background: transparent;
+            border: 1px solid transparent;
+            width: 100%;
             text-align: left;
         }
-        
-        /* iOS Safari specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            input[type="date"],
-            input[type="time"] {
-                min-width: 0 !important;
-                flex-shrink: 1;
-            }
-        }
+        .day.today { background: var(--card); border-color: var(--border); }
+        .day-name { width: 48px; flex: 0 0 auto; padding-top: 3px; font-size: 14px; font-weight: 700; color: var(--muted-strong); }
+        .day.today .day-name { color: var(--navy); }
+        .day-windows { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
-        /* FIXED: Force 24-hour time input */
-        input[type="time"] {
-            -webkit-appearance: textfield;
-            -moz-appearance: textfield;
-        }
-        
-        /* Mobile specific constraints */
-        @media (max-width: 768px) {
-            .app-container {
-                padding: 0 12px;
-            }
-            
-            .glass-card {
-                padding: 20px 16px;
-                margin: 16px 0;
-            }
-            
-            input[type="date"],
-            input[type="text"],
-            input[type="number"] {
-                font-size: 16px;
-                padding: 14px 16px;
-            }
-        }
+        .win { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+        .win-times { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+        .win-note { font-size: 12.5px; color: var(--muted); }
+        .day-empty { font-size: 13px; color: var(--muted); padding-top: 2px; }
 
-        input[type="time"]::-webkit-datetime-edit-ampm-field {
-            display: none;
-        }
+        .days-more { padding: 11px 14px; font-size: 14px; font-weight: 600; color: var(--link); text-align: left; }
 
-        input[type="time"]::-webkit-calendar-picker-indicator {
-            filter: invert(1) brightness(1.2);
-            cursor: pointer;
-            font-size: 20px;
-        }
-
-        input[type="date"]::-webkit-calendar-picker-indicator {
-            filter: invert(1) brightness(1.2);
-            cursor: pointer;
-            font-size: 20px;
-        }
-
-        input[type="date"]::-webkit-datetime-edit,
-        input[type="time"]::-webkit-datetime-edit {
-            color: white;
-        }
-
-        input[type="date"]::-webkit-datetime-edit-fields-wrapper,
-        input[type="time"]::-webkit-datetime-edit-fields-wrapper {
-            color: white;
-        }
-
-        input::placeholder {
-            color: rgba(255, 255, 255, 0.4);
-        }
-
-        input:focus {
-            outline: none;
-            background: rgba(255, 255, 255, 0.15);
-            border-color: var(--foam);
-            box-shadow: 0 0 0 4px rgba(184, 230, 249, 0.15);
-        }
-
-        .input-unit {
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 16px;
-            font-weight: 600;
-            opacity: 0.6;
-            pointer-events: none;
-        }
-
-        .input-hint {
-            font-size: 13px;
-            margin-top: 8px;
-            opacity: 0.6;
-            line-height: 1.4;
-        }
-
-        .info-panel {
-            background: rgba(107, 207, 127, 0.15);
-            border: 1px solid rgba(107, 207, 127, 0.3);
+        .best {
+            margin: 14px 14px 0;
+            padding: 14px 16px;
+            background: var(--card);
             border-radius: 16px;
-            padding: 16px;
-            margin-top: 16px;
-            backdrop-filter: blur(10px);
-        }
-
-        .info-text {
-            font-size: 14px;
-            line-height: 1.6;
-            opacity: 0.9;
-        }
-
-        .info-text strong {
-            font-weight: 700;
-            opacity: 1;
-        }
-
-        .button-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            padding: 16px 0 24px 0;
-        }
-
-        .btn {
-            padding: 18px 28px;
-            border-radius: 18px;
-            border: none;
-            font-size: 17px;
-            font-weight: 700;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            letter-spacing: 0.3px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .btn:hover::before {
-            opacity: 1;
-        }
-
-        .btn:active {
-            transform: scale(0.97);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--sunrise) 0%, #FFC947 100%);
-            color: var(--ocean-dark);
-            box-shadow: 0 8px 24px rgba(255, 217, 61, 0.4);
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1.5px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(10, 22, 40, 0.95);
-            backdrop-filter: blur(20px);
             display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .best .headline { font-size: 17px; font-weight: 700; }
+        .best .sub { font-size: 13px; color: var(--muted); }
+
+        /* ------------------------------------------------------ caveats/footer */
+
+        .caveats {
+            margin: 20px 14px 0;
+            padding: 18px;
+            border-radius: 18px;
+            background: var(--card);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            scroll-margin-top: 12px;
+        }
+        .caveats h2 { font-size: 17px; font-weight: 700; }
+        .caveats h3 { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+        .caveats p { font-size: 13px; line-height: 1.55; color: var(--muted-strong); }
+        .caveats p + p { margin-top: 8px; }
+
+        .site-footer {
+            margin-top: auto;
+            display: flex;
+            gap: 14px;
             align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            animation: fadeIn 0.3s;
+            padding: 18px 18px 26px;
+            font-size: 12px;
+            color: var(--muted);
         }
+        .site-footer .version { margin-left: auto; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        /* -------------------------------------------------------------- misc */
+
+        .hidden { display: none !important; }
+
+        .error-panel {
+            margin: 12px 14px 0;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: var(--danger);
+            color: var(--danger-ink);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
-
-        .loading-content {
-            text-align: center;
-        }
-
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top-color: var(--foam);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .loading-text {
-            font-size: 16px;
+        .error-panel .title { font-size: 15px; font-weight: 700; }
+        .error-panel .body { font-size: 13px; line-height: 1.5; }
+        .error-panel .actions { display: flex; gap: 8px; }
+        .error-panel button {
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.18);
+            color: var(--danger-ink);
+            font-size: 13px;
             font-weight: 600;
-            opacity: 0.9;
         }
 
         .toast {
             position: fixed;
-            top: 80px;
             left: 50%;
-            transform: translateX(-50%);
-            padding: 16px 24px;
-            border-radius: 16px;
-            font-size: 15px;
-            font-weight: 600;
-            z-index: 1001;
-            animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            max-width: 90%;
-            text-align: center;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-
-        .toast-success {
-            background: rgba(107, 207, 127, 0.95);
-            color: white;
-        }
-
-        .toast-error {
-            background: rgba(255, 107, 107, 0.95);
-            color: white;
-        }
-
-        .result-card {
-            margin: 0;
-            border-radius: 28px;
-            overflow: hidden;
-            animation: scaleIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-        }
-
-        @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        .result-hero {
-            padding: 48px 32px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .result-hero::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-            animation: pulse 4s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 0.8; }
-        }
-
-        .result-hero.safe {
-            background: linear-gradient(135deg, var(--mint) 0%, #4DB65D 100%);
-        }
-
-        .result-hero.warning {
-            background: linear-gradient(135deg, var(--sunrise) 0%, #FFB340 100%);
-        }
-
-        .result-hero.danger {
-            background: linear-gradient(135deg, var(--sunset) 0%, #E84855 100%);
-        }
-
-        .result-icon {
-            font-size: 80px;
-            margin-bottom: 16px;
-            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
-            position: relative;
-            z-index: 1;
-        }
-
-        .result-status {
-            font-size: 32px;
-            font-weight: 900;
-            margin-bottom: 12px;
-            letter-spacing: -0.5px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .result-message {
-            font-size: 16px;
-            opacity: 0.95;
-            line-height: 1.5;
-            position: relative;
-            z-index: 1;
-        }
-
-        .result-body {
-            background: rgba(255, 255, 255, 0.98);
-            color: var(--ocean-dark);
-            padding: 32px 28px;
-        }
-
-        .result-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 14px 0;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        }
-
-        .result-row:last-child {
-            border-bottom: none;
-        }
-
-        .result-label {
-            font-size: 15px;
-            opacity: 0.7;
-            font-weight: 500;
-        }
-
-        .result-value {
-            font-size: 16px;
-            font-weight: 700;
-        }
-
-        .clearance-box {
-            background: linear-gradient(135deg, rgba(107, 207, 127, 0.15) 0%, rgba(91, 163, 208, 0.15) 100%);
-            border-radius: 20px;
-            padding: 24px;
-            text-align: center;
-            margin: 24px 0;
-        }
-
-        .clearance-label {
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
-            opacity: 0.6;
-            margin-bottom: 8px;
-        }
-
-        .clearance-value {
-            font-size: 56px;
-            font-weight: 900;
-            letter-spacing: -2px;
-            line-height: 1;
-        }
-
-        .clearance-value.positive {
-            color: var(--mint);
-        }
-
-        .clearance-value.negative {
-            color: var(--sunset);
-        }
-
-        .progress-section {
-            margin-top: 24px;
-        }
-
-        .progress-bar {
-            height: 12px;
-            background: rgba(0, 0, 0, 0.08);
-            border-radius: 6px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-fill {
-            height: 100%;
-            border-radius: 6px;
-            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .progress-fill::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-            animation: shimmer 2s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-        }
-
-        .progress-fill.safe {
-            background: linear-gradient(90deg, var(--mint) 0%, #4DB65D 100%);
-        }
-
-        .progress-fill.warning {
-            background: linear-gradient(90deg, var(--sunrise) 0%, #FFB340 100%);
-        }
-
-        .progress-fill.danger {
-            background: linear-gradient(90deg, var(--sunset) 0%, #E84855 100%);
-        }
-
-        .progress-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 10px;
+            bottom: 24px;
+            transform: translateX(-50%) translateY(140%);
+            background: var(--navy);
+            color: var(--paper);
+            padding: 12px 18px;
+            border-radius: 999px;
             font-size: 13px;
             font-weight: 600;
-            opacity: 0.7;
-        }
-
-        .windows-container {
-            padding: 0;
-        }
-
-        .windows-header {
-            margin-bottom: 20px;
-        }
-
-        .windows-title {
-            font-size: 28px;
-            font-weight: 900;
-            letter-spacing: -0.5px;
-            margin-bottom: 4px;
-        }
-
-        .time-window {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 20px;
-            padding: 20px 24px;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        }
-
-        .window-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-        }
-
-        .window-time-range {
-            flex: 1;
-        }
-
-        .window-time {
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: -0.3px;
-            margin-bottom: 4px;
-        }
-
-        .window-duration {
-            font-size: 13px;
-            opacity: 0.7;
-            font-weight: 500;
-        }
-
-        .window-min-badge {
-            background: linear-gradient(135deg, var(--mint) 0%, #4DB65D 100%);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 800;
-            box-shadow: 0 4px 12px rgba(107, 207, 127, 0.4);
-            text-align: center;
-            min-width: 80px;
-        }
-
-        .badge-label {
-            font-size: 10px;
-            opacity: 0.8;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 2px;
-        }
-
-        .badge-value {
-            font-size: 18px;
-            font-weight: 900;
-        }
-
-        .window-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .detail-box {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 12px;
-        }
-
-        .detail-label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            opacity: 0.6;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-
-        .detail-value {
-            font-size: 16px;
-            font-weight: 700;
-        }
-
-        .detail-subtext {
-            font-size: 12px;
-            opacity: 0.6;
-            margin-top: 2px;
-        }
-
-        .no-times-card {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 107, 107, 0.3);
-            border-radius: 24px;
-            padding: 40px 28px;
-            margin: 0 0 20px 0;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(255, 107, 107, 0.2);
-        }
-
-        .no-times-icon {
-            font-size: 72px;
-            margin-bottom: 20px;
-        }
-
-        .no-times-title {
-            font-size: 26px;
-            font-weight: 900;
-            margin-bottom: 12px;
-            letter-spacing: -0.5px;
-        }
-
-        .no-times-message {
-            font-size: 16px;
-            opacity: 0.85;
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }
-
-        .suggestions {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 20px;
-            text-align: left;
-        }
-
-        .suggestions-title {
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 12px;
-            opacity: 0.7;
-        }
-
-        .suggestion {
-            font-size: 15px;
-            padding: 10px 0;
-            padding-left: 24px;
-            position: relative;
-            line-height: 1.5;
-        }
-
-        .suggestion::before {
-            content: '→';
-            position: absolute;
-            left: 0;
-            font-weight: 900;
-            color: var(--foam);
-        }
-
-        .footer-links {
-            text-align: center;
-            padding: 24px 0 40px;
-            opacity: 0.7;
-            font-size: 14px;
-        }
-
-        .footer-links a {
-            color: var(--foam);
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .footer-links a:hover {
-            text-decoration: underline;
-        }
-
-        .validation-badge {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(107, 207, 127, 0.95);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 700;
-            z-index: 100;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-        }
-
-        /* Advanced section toggle */
-        .advanced-toggle {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 0;
-            margin-top: 12px;
-            cursor: pointer;
-            font-size: 13px;
-            opacity: 0.6;
-            transition: opacity 0.2s;
-            user-select: none;
-        }
-
-        .advanced-toggle:hover {
-            opacity: 0.9;
-        }
-
-        .advanced-toggle-arrow {
-            transition: transform 0.2s;
-            font-size: 10px;
-        }
-
-        .advanced-toggle.open .advanced-toggle-arrow {
-            transform: rotate(90deg);
-        }
-
-        .advanced-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-
-        .advanced-content.open {
-            max-height: 200px;
-        }
-
-        /* Cache status indicator */
-        .cache-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 14px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            font-size: 12px;
-            margin-top: 8px;
-        }
-
-        .cache-status-icon {
-            font-size: 14px;
-        }
-
-        .cache-status-text {
-            opacity: 0.85;
-            flex: 1;
-        }
-
-        .cache-status.cached {
-            border: 1px solid rgba(107, 207, 127, 0.3);
-        }
-
-        .cache-status.fresh {
-            border: 1px solid rgba(78, 205, 196, 0.3);
-        }
-
-        /* Force refresh checkbox */
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 12px;
-            padding: 10px 14px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            cursor: pointer;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--foam);
-            cursor: pointer;
-        }
-
-        .checkbox-group label {
-            font-size: 13px;
-            opacity: 0.9;
-            cursor: pointer;
-            flex: 1;
-        }
-
-        .checkbox-hint {
-            font-size: 11px;
-            opacity: 0.6;
-            margin-left: 28px;
-            margin-top: 4px;
-        }
-
-        /* Loading skeleton */
-        .skeleton {
-            background: linear-gradient(90deg,
-                rgba(255, 255, 255, 0.05) 25%,
-                rgba(255, 255, 255, 0.1) 50%,
-                rgba(255, 255, 255, 0.05) 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-            border-radius: 8px;
-        }
-
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-
-        .skeleton-text {
-            height: 16px;
-            margin-bottom: 8px;
-        }
-
-        .skeleton-text.short {
-            width: 60%;
-        }
-
-        .skeleton-text.medium {
-            width: 80%;
-        }
-
-        .skeleton-card {
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            margin-bottom: 16px;
-        }
-
-        /* Error panel with retry */
-        .error-panel {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 16px;
-            padding: 20px;
-            margin: 16px 0;
-            text-align: center;
-        }
-
-        .error-panel-icon {
-            font-size: 32px;
-            margin-bottom: 12px;
-        }
-
-        .error-panel-title {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #ef4444;
-        }
-
-        .error-panel-message {
-            font-size: 14px;
-            opacity: 0.85;
-            margin-bottom: 16px;
-            line-height: 1.5;
-        }
-
-        .error-panel-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .btn-retry {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-retry:hover {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-use-cache {
-            background: rgba(107, 207, 127, 0.2);
-            border: 1px solid rgba(107, 207, 127, 0.4);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-use-cache:hover {
-            background: rgba(107, 207, 127, 0.3);
-        }
-
-        /* Tide chart collapsible section */
-        .tide-chart-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 14px 20px;
-            margin: 18px 0 0 0;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            opacity: 0.7;
-            transition: opacity 0.2s;
-            user-select: none;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 16px;
-        }
-
-        .tide-chart-toggle:hover {
-            opacity: 1;
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        .tide-chart-toggle .toggle-arrow {
-            transition: transform 0.3s;
-            font-size: 10px;
-        }
-
-        .tide-chart-toggle.open .toggle-arrow {
-            transform: rotate(90deg);
-        }
-
-        .tide-chart-collapse {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s ease;
-        }
-
-        .tide-chart-collapse.open {
-            max-height: 1200px;
-        }
-
-        .tide-chart-card {
-            background: rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(40px);
-            -webkit-backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 24px;
-            margin: 12px 0 0 0;
-            padding: 20px 12px 14px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-        }
-
-        .tide-chart-svg {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        .tide-chart-legend {
-            display: flex;
-            justify-content: center;
-            gap: 18px;
-            margin-top: 14px;
-            flex-wrap: wrap;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            opacity: 0.8;
-        }
-
-        .legend-swatch {
-            width: 18px;
-            height: 4px;
-            border-radius: 2px;
-        }
-
-        .legend-swatch.safe-swatch {
-            background: rgba(107, 207, 127, 0.6);
-            height: 12px;
-        }
-
-        .legend-swatch.tide-swatch {
-            background: var(--sky-bright);
-        }
-
-        .legend-swatch.clearance-swatch {
-            background: rgba(255, 217, 61, 0.8);
-            border: 1px dashed rgba(255, 217, 61, 0.8);
-            height: 1px;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        @media (max-width: 480px) {
-            .hero-title {
-                font-size: 28px;
-            }
-            
-            .card-title {
-                font-size: 18px;
-            }
+            box-shadow: 0 10px 30px rgba(10,22,40,0.28);
+            transition: transform 0.25s ease, visibility 0.25s;
+            z-index: 40;
+            max-width: calc(100vw - 32px);
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); visibility: visible; }
+
+        .busy { opacity: 0.55; transition: opacity 0.15s; }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <div class="hero-header">
-            <div class="hero-icon">⛵</div>
-            <h1 class="hero-title">Outboard Boating Club<br>Bridge Clearance</h1>
-            <p class="hero-subtitle">Tamaki Drive · Auckland<br>
-                <a href="https://maps.google.com/?q=-36.85277381522325,174.80464067734198" target="_blank" style="font-size: 13px; color: var(--foam); text-decoration: underline; opacity: 0.9;">View on Map 📍</a>
-            </p>
-            <div class="beta-notice">
-                <strong>⚠️ BETA:</strong> This tool uses the traditional maritime "Rule of Twelfths" for tidal interpolation between LINZ data points. Always double-check results against <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" style="color: var(--foam); text-decoration: underline;">OBC bridge clearance tables</a> before passage. Use at your own risk.
-            </div>
-        </div>
+    <div class="shell">
 
-        <div class="glass-card">
-            <div class="card-header">
-                <div class="card-icon">🌉</div>
-                <h2 class="card-title">Select Bridge Span</h2>
-            </div>
-            <div class="span-grid">
-                <div class="span-option selected" onclick="selectSpan('in-out', 6.2)">
-                    <div class="span-label">In/Out</div>
-                    <div class="span-value">6.2m</div>
+        <header class="masthead">
+            <div class="masthead-top">
+                <img class="masthead-logo" src="logo.png" alt="Outboard Boating Club">
+                <div class="masthead-names">
+                    <span class="masthead-title">Bridge Clearance <a class="beta-tag" href="#caveats">(BETA)&#42;</a></span>
+                    <span class="masthead-where">Tamaki Drive &middot; Outboard Boating Club</span>
                 </div>
-                <div class="span-option" onclick="selectSpan('high', 6.5)">
-                    <div class="span-label">High</div>
-                    <div class="span-value">6.5m</div>
-                </div>
+                <a class="masthead-info" href="#caveats" aria-label="How this works, and its limits">i</a>
             </div>
-            <div class="info-panel">
-                <p class="info-text"><strong>Chart Datum:</strong> Clearance measured at lowest astronomical tide. Actual clearance decreases as tide rises.</p>
-            </div>
-        </div>
 
-        <div class="glass-card">
-            <div class="card-header">
-                <div class="card-icon">📅</div>
-                <h2 class="card-title">When are you traveling?</h2>
+            <p class="masthead-blurb">Safe passage times under the Tamaki Drive bridge using LINZ tide
+                predictions and your boat's height above the waterline. Use at your own caution &mdash;
+                <a href="#caveats" style="color: inherit;">read the conditions</a>.</p>
+
+            <div class="masthead-rule"></div>
+
+            <div class="gap-now">
+                <span class="label">Current bridge gap</span>
+                <span class="gap-now-figure num" id="gapNowFigure">&mdash;</span>
+                <span class="gap-now-when" id="gapNowWhen">Loading tide data&hellip;</span>
             </div>
-            <div class="form-group">
-                <label class="form-label">Date</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="date" id="tideDate" style="flex: 1;">
-                    <button type="button" id="todayBtn" onclick="setQuickDate()" style="padding: 16px 20px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.25); border-radius: 16px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; transition: all 0.2s;">Today</button>
+        </header>
+
+        <section class="setup" aria-label="Your passage">
+            <div class="row">
+                <div class="field">
+                    <span class="label" id="dateLabel">Date</span>
+                    <div class="inset">
+                        <button type="button" class="inset-btn" id="datePrev" aria-label="Previous day">&lsaquo;</button>
+                        <div class="picker-wrap">
+                            <span class="inset-readout">
+                                <span class="primary" id="dateReadout">&mdash;</span>
+                                <span class="secondary" id="dateRelative">&nbsp;</span>
+                            </span>
+                            <input type="date" id="tideDate" aria-labelledby="dateLabel">
+                        </div>
+                        <button type="button" class="inset-btn" id="dateNext" aria-label="Next day">&rsaquo;</button>
+                    </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Time</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="text" id="preferredTime" placeholder="e.g. 14:30" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" style="flex: 1;">
-                    <button type="button" id="nowBtn" onclick="fillCurrentTime()" style="padding: 16px 20px; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.25); border-radius: 16px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; transition: all 0.2s;">Now</button>
-                </div>
-            </div>
-            <div class="advanced-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');">
-                <span class="advanced-toggle-arrow">&#9654;</span>
-                <span>Advanced tide data options</span>
-            </div>
-            <div class="advanced-content">
-                <div class="checkbox-group" onclick="if(event.target === this) document.getElementById('forceRefresh').checked = !document.getElementById('forceRefresh').checked">
-                    <input type="checkbox" id="forceRefresh">
-                    <label for="forceRefresh">Force refresh tide data</label>
-                </div>
-                <p class="checkbox-hint">Fetches fresh data from LINZ (slower than using cached data)</p>
-                <div id="cacheStatus" class="cache-status hidden">
-                    <span class="cache-status-icon">📦</span>
-                    <span class="cache-status-text">Checking data status...</span>
+
+                <div class="field">
+                    <span class="label" id="timeLabel">Time</span>
+                    <div class="inset">
+                        <div class="picker-wrap">
+                            <span class="inset-readout">
+                                <span class="primary num" id="timeReadout">&mdash;</span>
+                                <span class="secondary">Departure</span>
+                            </span>
+                            <input type="time" id="preferredTime" aria-labelledby="timeLabel">
+                        </div>
+                        <button type="button" class="inset-btn wide" id="nowBtn">Now</button>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="glass-card">
-            <div class="card-header">
-                <div class="card-icon">⛵</div>
-                <h2 class="card-title">Your Boat</h2>
+            <div class="field">
+                <span class="label" id="spanLabel">Select bridge span</span>
+                <div class="segmented" role="group" aria-labelledby="spanLabel" id="spanGroup"></div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Height from Waterline</label>
-                <div class="input-wrapper">
-                    <input type="number" id="boatHeight" step="0.1" placeholder="4.5">
-                    <span class="input-unit">m</span>
+
+            <div class="field">
+                <span class="label" id="marginLabel">Safety margin</span>
+                <div class="inset">
+                    <button type="button" class="inset-btn step" data-step="margin" data-delta="-1" aria-label="Less safety margin">&minus;</button>
+                    <span class="inset-readout figure num" id="marginReadout" role="status" aria-labelledby="marginLabel">0.50<span class="unit"> m</span></span>
+                    <button type="button" class="inset-btn step" data-step="margin" data-delta="1" aria-label="More safety margin">+</button>
                 </div>
-                <p class="input-hint">To highest point (mast, antenna, etc.) when unladen. Value is remembered for next visit.</p>
+                <div class="chips" id="marginChips"></div>
+                <p class="help">Clearance you want left above the boat. Steps of 0.05&nbsp;m; set 0 to see the bare gap.</p>
             </div>
-            <div class="form-group">
-                <label class="form-label">Safety Margin</label>
-                <div class="input-wrapper">
-                    <input type="number" id="safetyMargin" step="0.1" value="0.5">
-                    <span class="input-unit">m</span>
+
+            <div class="field">
+                <div class="field-head">
+                    <span class="label" id="boatLabel">Boat height</span>
+                    <span class="field-note">saved on this device</span>
                 </div>
-                <p class="input-hint">Recommended minimum clearance above boat</p>
+                <div class="inset">
+                    <button type="button" class="inset-btn step" data-step="boat" data-delta="-1" aria-label="Lower boat height">&minus;</button>
+                    <span class="inset-readout figure num" id="boatReadout" role="status" aria-labelledby="boatLabel">&mdash;</span>
+                    <button type="button" class="inset-btn step" data-step="boat" data-delta="1" aria-label="Raise boat height">+</button>
+                </div>
+                <p class="help">Waterline to your highest point &mdash; mast, aerial, radar &mdash; with the boat
+                    unladen. Remembered next visit.</p>
+            </div>
+        </section>
+
+        <div class="error-panel hidden" id="errorPanel" role="alert">
+            <span class="title">Tide data unavailable</span>
+            <span class="body" id="errorBody"></span>
+            <div class="actions">
+                <button type="button" id="errorRetry">Try again</button>
+                <button type="button" id="errorCached" class="hidden">Use cached data</button>
             </div>
         </div>
 
-        <div id="loading" class="loading-overlay hidden">
-            <div class="loading-content">
-                <div class="spinner"></div>
-                <p class="loading-text">Loading tide data...</p>
+        <section class="result-wrap" id="resultWrap" aria-live="polite"></section>
+
+        <section class="provenance" id="provenance">
+            <div>
+                <div class="who">LINZ tide predictions &middot; Auckland</div>
+                <div class="when" id="provenanceWhen">Loading&hellip;</div>
             </div>
+            <button type="button" id="refreshBtn">Refresh</button>
+        </section>
+
+        <div class="days-head">
+            <span class="label" id="daysHeading">Next 7 days</span>
+            <button type="button" class="toggle" id="longOnly" aria-pressed="false">
+                <span>Over 1 hour only</span>
+                <span class="toggle-track"><span class="toggle-knob"></span></span>
+            </button>
         </div>
 
-        <div id="errorPanel" class="error-panel hidden">
-            <div class="error-panel-icon">⚠️</div>
-            <div class="error-panel-title">Unable to Load Tide Data</div>
-            <div class="error-panel-message" id="errorMessage">An error occurred while fetching tide data.</div>
-            <div class="error-panel-actions">
-                <button class="btn-retry" onclick="retryLoadTideData()">🔄 Try Again</button>
-                <button class="btn-use-cache hidden" id="useCacheBtn" onclick="loadFromCache()">📦 Use Cached Data</button>
+        <section class="days" id="days" aria-labelledby="daysHeading"></section>
+
+        <section class="best hidden" id="best"></section>
+
+        <section class="caveats" id="caveats">
+            <h2>&#42; Beta &mdash; conditions and caveats</h2>
+
+            <div>
+                <h3>Check the OBC table before passage</h3>
+                <p>This page is a convenience, not an authority. Always cross-check against the
+                    <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC
+                    Bridge Gap Calculation Chart</a> before you commit to a passage. Use at your own risk.</p>
             </div>
-        </div>
 
-        <div id="toastContainer"></div>
-        <div id="resultContainer"></div>
+            <div>
+                <h3>How the tide height is worked out</h3>
+                <p>LINZ publishes four tide times a day, not a continuous curve. Every height between
+                    them is interpolated using the traditional maritime <b>Rule of Twelfths</b>: across the
+                    interval between one tide and the next, the water moves one twelfth of the range in
+                    the first sixth of the interval, then two, three, three, two and one. The OBC chart
+                    states that it uses the same method, and this page is checked against all 407 values
+                    of that chart.</p>
+                <p>The Rule of Twelfths is an approximation of a real tide, and it assumes a smooth
+                    interval between two published points. Treat any figure between the published tide
+                    times as an estimate, and the closer you are to the margin the more that matters.</p>
+            </div>
 
-        <div class="button-group">
-            <button class="btn btn-secondary" onclick="checkClearance()">Check Now</button>
-            <button class="btn btn-primary" onclick="findBestTimes()">Find Times</button>
-        </div>
+            <div>
+                <h3>What the figures do and do not include</h3>
+                <p>The <b>gap</b> is the span height above chart datum less the predicted tide: 6.2&nbsp;m for
+                    the IN/OUT span, 6.5&nbsp;m for the HIGH span. <b>Spare</b> is that gap less your boat
+                    height and your safety margin. Nothing here accounts for your boat's trim, its load,
+                    or anything that moves in a swell.</p>
+                <p>A window is shown as <b>safe</b> only where at least 0.50&nbsp;m of spare remains,
+                    <b>caution</b> where the boat fits with less than that, and <b>danger</b> where it does
+                    not fit at all.</p>
+            </div>
 
-        <div class="footer-links">
-            <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank">OBC Bridge Clearance Tables (PDF)</a>
-            <br>
-            <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank">OBC Bridge Location</a>
-        </div>
+            <div>
+                <h3>Weather moves the water</h3>
+                <p>Predictions are astronomical. Barometric pressure, wind and storm surge routinely
+                    shift the real water level by a tenth of a metre or more, and a low pressure system
+                    raises it. Add margin in adverse conditions.</p>
+            </div>
 
-        <div class="info-panel" style="margin: 20px 0 40px 0; font-size: 13px;">
-            <p class="info-text"><strong>About Tide Calculations:</strong> This calculator uses official LINZ tide data points (typically 4 per day) and applies the traditional maritime "Rule of Twelfths" for interpolation between these points. This method accounts for the non-linear nature of tidal movement (slow near high/low, faster in the middle). Results marked with an asterisk (*) indicate interpolated values using this method.</p>
-        </div>
+            <div>
+                <h3>Where the data comes from</h3>
+                <p>Tide predictions are published by
+                    <a href="https://www.linz.govt.nz/sea/tides/tide-predictions" target="_blank" rel="noopener">Land
+                    Information New Zealand</a> for the Port of Auckland. They ship with this page, so it
+                    works without a connection once loaded. Times are New Zealand local time, including
+                    daylight saving.</p>
+            </div>
+        </section>
+
+        <footer class="site-footer">
+            <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
+            <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
+            <span class="version" id="versionTag">v10.0</span>
+        </footer>
     </div>
 
-    <div class="validation-badge">✓ v9.3</div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script>
+        // ------------------------------------------------------------------
+        // Shared state read by the tide engine below.
+        // ------------------------------------------------------------------
+        let selectedSpanId = 'in-out';
         let selectedSpanClearance = 6.2;
         let selectedSpanName = 'IN/OUT';
         let tideData = [];
         let fullDayTideData = [];
         let lastLoadedDate = null;
-        let nextDayFirstPoint = null; // Cache next day's first point
-        let prevDayLastPoint = null; // Cache previous day's last point
+        let nextDayFirstPoint = null;   // anchor for moments after the day's last tide
+        let prevDayLastPoint = null;    // anchor for moments before the day's first tide
 
         // ============================================================
         // BRIDGE CONFIGURATION (Multi-bridge support - future feature)
@@ -2089,403 +1381,6 @@
             }
         } // Track which date's data is currently loaded
 
-        // Set date input to current NZ date
-        const nzDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-        const year = nzDate.getFullYear();
-        const month = String(nzDate.getMonth() + 1).padStart(2, '0');
-        const day = String(nzDate.getDate()).padStart(2, '0');
-        document.getElementById('tideDate').value = `${year}-${month}-${day}`;
-
-        // Constrain the picker to the years tide data can actually be served for
-        (function setDateInputRange() {
-            const years = TideDataService.config.availableYears;
-            const dateEl = document.getElementById('tideDate');
-            dateEl.min = `${years[0]}-01-01`;
-            dateEl.max = `${years[years.length - 1]}-12-31`;
-        })();
-
-        // Set date to today (NZ time)
-        function setQuickDate() {
-            const nz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-            const y = nz.getFullYear();
-            const m = String(nz.getMonth() + 1).padStart(2, '0');
-            const d = String(nz.getDate()).padStart(2, '0');
-            document.getElementById('tideDate').value = `${y}-${m}-${d}`;
-            updateCacheStatus();
-        }
-
-        // Fill current NZ time into the time input
-        function fillCurrentTime() {
-            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-            const h = String(now.getHours()).padStart(2, '0');
-            const m = String(now.getMinutes()).padStart(2, '0');
-            const timeInput = document.getElementById('preferredTime');
-            timeInput.value = h + ':' + m;
-            previousTimeValue = timeInput.value;
-        }
-
-        // Restore saved boat height and safety margin from localStorage
-        (function restoreSavedInputs() {
-            try {
-                const savedBoatHeight = localStorage.getItem('boatHeight');
-                const savedSafetyMargin = localStorage.getItem('safetyMargin');
-                if (savedBoatHeight) document.getElementById('boatHeight').value = savedBoatHeight;
-                if (savedSafetyMargin) document.getElementById('safetyMargin').value = savedSafetyMargin;
-            } catch (e) { /* localStorage unavailable */ }
-        })();
-
-        // Save boat height and safety margin on change
-        document.getElementById('boatHeight').addEventListener('change', function() {
-            try { localStorage.setItem('boatHeight', this.value); } catch (e) {}
-        });
-        document.getElementById('safetyMargin').addEventListener('change', function() {
-            try { localStorage.setItem('safetyMargin', this.value); } catch (e) {}
-        });
-
-        // Initialize cache status on page load
-        updateCacheStatus();
-
-        // Update cache status when date changes
-        document.getElementById('tideDate').addEventListener('change', updateCacheStatus);
-
-        function selectSpan(spanType, clearance) {
-            selectedSpanClearance = clearance;
-            selectedSpanName = spanType === 'high' ? 'HIGH' : 'IN/OUT';
-            
-            document.querySelectorAll('.span-option').forEach((card, index) => {
-                if ((spanType === 'in-out' && index === 0) || (spanType === 'high' && index === 1)) {
-                    card.classList.add('selected');
-                } else {
-                    card.classList.remove('selected');
-                }
-            });
-        }
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.animation = 'slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) reverse';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        // Track last error for retry functionality
-        let lastLoadError = null;
-
-        // Update cache status display.
-        // Probes bundled availability once per year, then re-renders with the answer.
-        function updateCacheStatus() {
-            const dateValue = document.getElementById('tideDate')?.value;
-            if (dateValue) {
-                const probeYear = new Date(dateValue + 'T00:00:00').getFullYear();
-                if (TideDataService.bundledAvailability[probeYear] === undefined) {
-                    TideDataService.isBundledAvailable(probeYear).then(() => renderCacheStatus());
-                }
-            }
-            renderCacheStatus();
-        }
-
-        function renderCacheStatus() {
-            const statusEl = document.getElementById('cacheStatus');
-            const dateInput = document.getElementById('tideDate').value;
-
-            if (!statusEl || !dateInput) return;
-
-            const selectedDate = new Date(dateInput + 'T00:00:00');
-            const year = selectedDate.getFullYear();
-            const cached = TideDataService.getCachedData(year);
-
-            statusEl.classList.remove('hidden', 'cached', 'fresh');
-
-            // Bundled data wins over both cache and network, so say so once the
-            // runtime probe has answered for this year
-            if (TideDataService.bundledAvailability[year] === true) {
-                statusEl.classList.add('cached');
-                statusEl.innerHTML = `
-                    <span class="cache-status-icon">📄</span>
-                    <span class="cache-status-text">Using tide data for ${year} bundled with the app</span>
-                `;
-                return;
-            }
-
-            if (cached) {
-                const cachedDate = new Date(cached.timestamp);
-                const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
-                const daysText = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;
-
-                statusEl.classList.add('cached');
-                statusEl.innerHTML = `
-                    <span class="cache-status-icon">📦</span>
-                    <span class="cache-status-text">Tide data for ${year} cached ${daysText}</span>
-                `;
-            } else {
-                statusEl.classList.add('fresh');
-                statusEl.innerHTML = `
-                    <span class="cache-status-icon">🌐</span>
-                    <span class="cache-status-text">Will fetch fresh data for ${year} from LINZ</span>
-                `;
-            }
-        }
-
-        // Show error panel
-        function showErrorPanel(errorMessage, showCacheOption = false) {
-            const panel = document.getElementById('errorPanel');
-            const msgEl = document.getElementById('errorMessage');
-            const cacheBtn = document.getElementById('useCacheBtn');
-
-            if (panel && msgEl) {
-                msgEl.textContent = errorMessage;
-                panel.classList.remove('hidden');
-
-                if (cacheBtn) {
-                    if (showCacheOption) {
-                        cacheBtn.classList.remove('hidden');
-                    } else {
-                        cacheBtn.classList.add('hidden');
-                    }
-                }
-            }
-        }
-
-        // Hide error panel
-        function hideErrorPanel() {
-            const panel = document.getElementById('errorPanel');
-            if (panel) {
-                panel.classList.add('hidden');
-            }
-        }
-
-        // Retry loading tide data
-        async function retryLoadTideData() {
-            hideErrorPanel();
-            await loadTideData();
-        }
-
-        // Load from cache (fallback when network fails)
-        async function loadFromCache() {
-            const dateInput = document.getElementById('tideDate').value;
-            if (!dateInput) return;
-
-            const selectedDate = new Date(dateInput + 'T00:00:00');
-            const year = selectedDate.getFullYear();
-            const cached = TideDataService.getCachedData(year);
-
-            if (!cached) {
-                showToast('No cached data available for this year', 'error');
-                return;
-            }
-
-            hideErrorPanel();
-
-            try {
-                tideData = parseLinzCsv(cached.csvText, selectedDate);
-
-                if (tideData.length === 0) {
-                    showToast('Cached data appears to be invalid', 'error');
-                    return;
-                }
-
-                lastLoadedDate = dateInput;
-
-                // Try to load adjacent days from cache too
-                const nextDate = new Date(selectedDate);
-                nextDate.setDate(nextDate.getDate() + 1);
-                const prevDate = new Date(selectedDate);
-                prevDate.setDate(prevDate.getDate() - 1);
-
-                const nextYearCached = TideDataService.getCachedData(nextDate.getFullYear());
-                const prevYearCached = TideDataService.getCachedData(prevDate.getFullYear());
-
-                if (nextYearCached) {
-                    const nextDayData = parseLinzCsv(nextYearCached.csvText, nextDate);
-                    nextDayFirstPoint = nextDayData.length > 0 ? nextDayData[0] : null;
-                }
-
-                if (prevYearCached) {
-                    const prevDayData = parseLinzCsv(prevYearCached.csvText, prevDate);
-                    prevDayLastPoint = prevDayData.length > 0 ? prevDayData[prevDayData.length - 1] : null;
-                }
-
-                // Same ordering as loadTideData: the series is built only once the
-                // adjacent-day anchors are known, and includes them
-                fullDayTideData = generateHourlyTideData(
-                    buildInterpolationPoints(tideData, prevDayLastPoint, nextDayFirstPoint),
-                    selectedDate
-                );
-
-                const cachedDate = new Date(cached.timestamp);
-                const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
-                showToast(`Using cached data (${daysAgo} days old)`, 'success');
-
-                updateCacheStatus();
-
-            } catch (error) {
-                console.error('Error loading from cache:', error);
-                showToast('Failed to load cached data', 'error');
-            }
-        }
-
-        async function loadTideData() {
-            const dateInput = document.getElementById('tideDate').value;
-            const forceRefresh = document.getElementById('forceRefresh')?.checked || false;
-
-            if (!dateInput) {
-                showToast('Please select a date', 'error');
-                return false;
-            }
-
-            const loading = document.getElementById('loading');
-            const loadingText = loading.querySelector('.loading-text');
-            loading.classList.remove('hidden');
-            hideErrorPanel();
-            document.getElementById('resultContainer').innerHTML = '';
-
-            try {
-                const selectedDate = new Date(dateInput + 'T00:00:00');
-                const year = selectedDate.getFullYear();
-
-                // Validate year using service config
-                if (!TideDataService.config.availableYears.includes(year)) {
-                    throw TideDataService.createError(
-                        TideDataService.ErrorTypes.YEAR_UNAVAILABLE,
-                        `Year ${year} not available`,
-                        { year: year }
-                    );
-                }
-
-                // Update loading message based on cache status
-                const cached = TideDataService.getCachedData(year);
-                if (loadingText) {
-                    if (cached && !forceRefresh) {
-                        loadingText.textContent = 'Loading from cache...';
-                    } else {
-                        loadingText.textContent = 'Connecting to tide data service...';
-                    }
-                }
-
-                // Use TideDataService for fetching (with cache support)
-                const response = await TideDataService.fetchTideDataForYear(year, forceRefresh);
-                console.log(`Main data fetched from: ${response.source}`);
-
-                if (loadingText) {
-                    loadingText.textContent = 'Parsing tide data...';
-                }
-
-                const csvText = await response.text();
-                tideData = parseLinzCsv(csvText, selectedDate);
-
-                if (tideData.length === 0) {
-                    throw TideDataService.createError(
-                        TideDataService.ErrorTypes.NO_DATA,
-                        'No tide data found',
-                        { date: dateInput }
-                    );
-                }
-
-                // Store the date we just loaded
-                lastLoadedDate = dateInput;
-
-                if (loadingText) {
-                    loadingText.textContent = 'Loading adjacent day data...';
-                }
-
-                // Load adjacent day points for accurate interpolation
-                nextDayFirstPoint = await getNextDayFirstPoint(dateInput, forceRefresh);
-                prevDayLastPoint = await getPrevDayLastPoint(dateInput, forceRefresh);
-
-                // Build the 10-minute series only now that the adjacent-day points
-                // are in hand, and include them, so times before the first tide and
-                // after the last one are interpolated instead of held flat.
-                fullDayTideData = generateHourlyTideData(
-                    buildInterpolationPoints(tideData, prevDayLastPoint, nextDayFirstPoint),
-                    selectedDate
-                );
-
-                console.log('Tide data loaded for:', dateInput);
-                console.log('Tide data points:', tideData.length);
-                console.log('Hourly interpolated:', fullDayTideData.length);
-                console.log('Data source:', response.source);
-                TideDataService.logStatus();
-
-                // Update cache status display
-                updateCacheStatus();
-
-                // Show appropriate success message
-                let sourceInfo = '';
-                if (response.source === 'bundled') {
-                    sourceInfo = ' (bundled with the app)';
-                } else if (response.source === 'cache') {
-                    const cachedData = TideDataService.getCachedData(year);
-                    if (cachedData) {
-                        const cachedDate = new Date(cachedData.timestamp);
-                        const daysAgo = Math.floor((new Date() - cachedDate) / (1000 * 60 * 60 * 24));
-                        const dateStr = cachedDate.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
-                        const daysText = daysAgo === 0 ? 'today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
-                        sourceInfo = response.staleFallback
-                            ? ` (offline - cached data from ${dateStr}, ${daysText})`
-                            : ` (cached data, pulled ${dateStr} - ${daysText})`;
-                    }
-                } else {
-                    sourceInfo = ' (fresh data, pulled today)';
-                }
-                showToast(`Tide data loaded${sourceInfo}`, 'success');
-
-                // Reset force refresh checkbox
-                const forceRefreshEl = document.getElementById('forceRefresh');
-                if (forceRefreshEl) forceRefreshEl.checked = false;
-
-                return true;
-
-            } catch (error) {
-                lastLoadError = error;
-
-                // Enhanced error handling with user-friendly messages
-                let errorMessage;
-                if (error.type && error.userMessage) {
-                    errorMessage = error.userMessage;
-                    console.error('Load error:', error.message);
-                    console.error('Error type:', error.type);
-                    console.error('Error details:', error.details);
-                } else {
-                    errorMessage = error.message || 'An unexpected error occurred';
-                    console.error('Load error:', error);
-                }
-
-                // Check if we have cached data to fall back to
-                const selectedDate = new Date(dateInput + 'T00:00:00');
-                const year = selectedDate.getFullYear();
-                const hasCachedFallback = TideDataService.getCachedData(year) !== null;
-
-                // Show error panel with retry and optional cache fallback
-                showErrorPanel(errorMessage, hasCachedFallback);
-
-                return false;
-            } finally {
-                // Reset loading text for next time
-                if (loadingText) {
-                    loadingText.textContent = 'Loading tide data...';
-                }
-                loading.classList.add('hidden');
-            }
-        }
-
-        // Resolve the NZ UTC offset for a specific wall-clock moment.
-        //
-        // The transitions happen at a time of day, not at midnight, so this takes
-        // the tide's own hours and minutes into account. Resolving per-day put
-        // every tide between 00:00 and the changeover an hour out on the two
-        // transition days each year (next: Sunday 27 September 2026).
-        //
-        // NZ Daylight Saving Time rules:
-        //   Starts: last Sunday of September, 02:00 NZST -> 03:00 NZDT (UTC+13)
-        //   Ends:   first Sunday of April,    03:00 NZDT -> 02:00 NZST (UTC+12)
-        //
-        // `date` must be a local-naive Date carrying the NZ wall-clock time.
         function getNZTimezoneOffset(date) {
             const year = date.getFullYear();
 
@@ -2792,169 +1687,6 @@
             };
         }
 
-        // ============================================================
-        // TIDE CYCLE CHART
-        // ============================================================
-        function renderTideChart(tidePoints, hourlyData, spanClearance, boatHeight, safetyMargin, safeWindows, requestedTime) {
-            if (!hourlyData || hourlyData.length === 0) return '';
-
-            const W = 700;
-            const H = 480;
-            const PAD_L = 58;
-            const PAD_R = 20;
-            const PAD_T = 90;
-            const PAD_B = 50;
-
-            const chartW = W - PAD_L - PAD_R;
-            const chartH = H - PAD_T - PAD_B;
-
-            // Y-axis: tight range around actual tide data with comfortable padding
-            const allHeights = hourlyData.map(d => d.height);
-            const dataMin = Math.min(...allHeights);
-            const dataMax = Math.max(...allHeights);
-            const clearanceNeeded = boatHeight + safetyMargin;
-            const maxSafeTide = spanClearance - clearanceNeeded;
-            // Include the safe-tide line in the range if it's close to the data
-            const rangeMin = Math.min(dataMin, maxSafeTide > -1 ? maxSafeTide : dataMin);
-            const rangeMax = Math.max(dataMax, maxSafeTide);
-            const rangePad = (rangeMax - rangeMin) * 0.25;
-            const minH = Math.floor((rangeMin - rangePad) * 10) / 10;
-            const maxH = Math.ceil((rangeMax + rangePad) * 10) / 10;
-            const hRange = maxH - minH || 1;
-
-            function timeToX(date) {
-                const h = date.getHours() + date.getMinutes() / 60;
-                return PAD_L + (h / 24) * chartW;
-            }
-            function heightToY(ht) {
-                return PAD_T + chartH - ((ht - minH) / hRange) * chartH;
-            }
-
-            // Cardinal spline for smooth curve
-            function cardinalSpline(points, tension) {
-                tension = tension || 0.4;
-                if (points.length < 2) return '';
-                let d = `M${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
-                if (points.length === 2) return d + ` L${points[1][0].toFixed(1)},${points[1][1].toFixed(1)}`;
-                for (let i = 0; i < points.length - 1; i++) {
-                    const p0 = points[Math.max(0, i - 1)];
-                    const p1 = points[i];
-                    const p2 = points[i + 1];
-                    const p3 = points[Math.min(points.length - 1, i + 2)];
-                    const cp1x = p1[0] + (p2[0] - p0[0]) / (6 / tension);
-                    const cp1y = p1[1] + (p2[1] - p0[1]) / (6 / tension);
-                    const cp2x = p2[0] - (p3[0] - p1[0]) / (6 / tension);
-                    const cp2y = p2[1] - (p3[1] - p1[1]) / (6 / tension);
-                    d += ` C${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
-                }
-                return d;
-            }
-
-            const curvePoints = hourlyData.map(pt => [timeToX(pt.time), heightToY(pt.height)]);
-            const curvePath = cardinalSpline(curvePoints);
-            const firstX = curvePoints[0][0];
-            const lastX = curvePoints[curvePoints.length - 1][0];
-            const bottomY = heightToY(minH);
-            const fillPath = curvePath + ` L${lastX.toFixed(1)},${bottomY.toFixed(1)} L${firstX.toFixed(1)},${bottomY.toFixed(1)} Z`;
-
-            // Safe window regions — green shading with dashed boundaries
-            let safeRects = '';
-            if (safeWindows && safeWindows.length > 0) {
-                safeWindows.forEach(win => {
-                    const x1 = timeToX(win.start.time);
-                    const x2 = timeToX(win.end.time);
-                    const rw = Math.max(x2 - x1, 4);
-                    safeRects += `<rect x="${x1.toFixed(1)}" y="${PAD_T}" width="${rw.toFixed(1)}" height="${chartH}" fill="rgba(107,207,127,0.10)" rx="4"/>`;
-                    safeRects += `<line x1="${x1.toFixed(1)}" y1="${PAD_T}" x2="${x1.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(107,207,127,0.35)" stroke-width="1" stroke-dasharray="4,4"/>`;
-                    safeRects += `<line x1="${(x1 + rw).toFixed(1)}" y1="${PAD_T}" x2="${(x1 + rw).toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(107,207,127,0.35)" stroke-width="1" stroke-dasharray="4,4"/>`;
-                });
-            }
-
-            // Max safe tide line
-            const safeLineY = heightToY(maxSafeTide);
-            let safeLine = '';
-            if (maxSafeTide > minH && maxSafeTide < maxH) {
-                safeLine = `<line x1="${PAD_L}" y1="${safeLineY.toFixed(1)}" x2="${W - PAD_R}" y2="${safeLineY.toFixed(1)}" stroke="rgba(255,217,61,0.55)" stroke-width="1" stroke-dasharray="6,4"/>`;
-                safeLine += `<text x="${PAD_L + 4}" y="${(safeLineY - 6).toFixed(1)}" font-size="10" fill="rgba(255,217,61,0.8)" text-anchor="start" font-weight="600">max safe tide ${maxSafeTide.toFixed(1)}m</text>`;
-            }
-
-            // Tide point markers — labels placed away from curve with more offset
-            let tideMarkers = '';
-            if (tidePoints && tidePoints.length > 0) {
-                tidePoints.forEach((pt, i) => {
-                    const x = timeToX(pt.time);
-                    const y = heightToY(pt.height);
-                    const timeStr = pt.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
-                    const isHigh = (i === 0 && pt.height > (tidePoints[1]?.height || 0)) ||
-                                   (i === tidePoints.length - 1 && pt.height > (tidePoints[i - 1]?.height || 0)) ||
-                                   (i > 0 && i < tidePoints.length - 1 && pt.height > tidePoints[i - 1].height && pt.height > tidePoints[i + 1].height);
-
-                    const labelYOffset = isHigh ? -26 : 24;
-                    // Clamp label positions so they stay within the SVG viewBox
-                    const rawLabelY = y + labelYOffset;
-                    const clampedLabelY = isHigh ? Math.max(rawLabelY, 16) : rawLabelY;
-                    tideMarkers += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="white" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>`;
-                    tideMarkers += `<text x="${x.toFixed(1)}" y="${clampedLabelY.toFixed(1)}" font-size="13" fill="white" text-anchor="middle" font-weight="700">${timeStr}</text>`;
-                    tideMarkers += `<text x="${x.toFixed(1)}" y="${(clampedLabelY + 16).toFixed(1)}" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">${pt.height.toFixed(2)}m</text>`;
-                });
-            }
-
-            // Requested time marker
-            let timeMarker = '';
-            if (requestedTime) {
-                const tx = timeToX(requestedTime);
-                timeMarker = `<line x1="${tx.toFixed(1)}" y1="${PAD_T}" x2="${tx.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,107,107,0.7)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
-                const tStr = requestedTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
-                timeMarker += `<text x="${tx.toFixed(1)}" y="${PAD_T + chartH + 18}" font-size="11" fill="rgba(255,107,107,0.95)" text-anchor="middle" font-weight="700">${tStr}</text>`;
-            }
-
-            // X-axis labels every 3 hours
-            let xLabels = '';
-            for (let h = 0; h <= 24; h += 3) {
-                const x = PAD_L + (h / 24) * chartW;
-                const label = h === 24 ? '00' : String(h).padStart(2, '0');
-                xLabels += `<text x="${x.toFixed(1)}" y="${H - 14}" font-size="12" fill="rgba(255,255,255,0.5)" text-anchor="middle">${label}:00</text>`;
-                xLabels += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T + chartH}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>`;
-            }
-
-            // Y-axis labels
-            let yLabels = '';
-            const yStep = hRange > 4 ? 1 : 0.5;
-            for (let ht = Math.ceil(minH / yStep) * yStep; ht <= maxH; ht += yStep) {
-                const y = heightToY(ht);
-                yLabels += `<text x="${PAD_L - 8}" y="${(y + 4).toFixed(1)}" font-size="11" fill="rgba(255,255,255,0.4)" text-anchor="end">${ht.toFixed(1)}m</text>`;
-                yLabels += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${W - PAD_R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>`;
-            }
-
-            const chartId = 'tideChart_' + Date.now();
-
-            return `
-            <div class="tide-chart-toggle" onclick="this.classList.toggle('open'); document.getElementById('${chartId}').classList.toggle('open');">
-                <span class="toggle-arrow">&#9654;</span>
-                <span>Tide Cycle Chart</span>
-            </div>
-            <div id="${chartId}" class="tide-chart-collapse">
-                <div class="tide-chart-card">
-                    <svg class="tide-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-                        ${xLabels}
-                        ${yLabels}
-                        <rect x="${PAD_L}" y="${PAD_T}" width="${chartW}" height="${chartH}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" rx="3"/>
-                        ${safeRects}
-                        ${safeLine}
-                        <path d="${fillPath}" fill="rgba(91,163,208,0.10)"/>
-                        <path d="${curvePath}" fill="none" stroke="var(--sky-bright)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        ${tideMarkers}
-                        ${timeMarker}
-                    </svg>
-                    <div class="tide-chart-legend">
-                        <div class="legend-item"><div class="legend-swatch tide-swatch"></div><span>Tide height</span></div>
-                        <div class="legend-item"><div class="legend-swatch safe-swatch"></div><span>Safe window</span></div>
-                        <div class="legend-item"><div class="legend-swatch clearance-swatch"></div><span>Max safe tide</span></div>
-                    </div>
-                </div>
-            </div>`;
-        }
-
         // Calculate safe windows for chart display (shared between Check Now and Find Times)
         // Spare clearance at or above this counts as "safe"; below it, and down to
         // zero, is "caution". Below zero the boat does not fit at all.
@@ -3019,6 +1751,42 @@
 
             for (const w of windows) w.hasSafeCore = (w.safeStart !== null);
             return windows;
+        }
+
+        // Windows are computed a day at a time, so a passage running past midnight
+        // comes back as one window ending 23:50 and another starting 00:00 the next
+        // day. Presenting those two separately would tell a skipper the passage
+        // closes at midnight when it does not, and would show the tail as a short
+        // "caution throughout" window of its own. Join them into the single window
+        // they are, carried on the day it opens.
+        function stitchWindowsAcrossMidnight(days) {
+            for (let i = 0; i < days.length - 1; i++) {
+                const day = days[i], next = days[i + 1];
+                if (day.unavailable || next.unavailable) continue;
+
+                const last = day.windows[day.windows.length - 1];
+                const first = next.windows[0];
+                if (!last || !first) continue;
+
+                const endsAtMidnight = last.end.time.getHours() === 23 && last.end.time.getMinutes() === 50;
+                const startsAtMidnight = first.start.time.getHours() === 0 && first.start.time.getMinutes() === 0;
+                if (!endsAtMidnight || !startsAtMidnight) continue;
+
+                last.end = first.end;
+                last.minClearance = Math.min(last.minClearance, first.minClearance);
+                if (first.maxClearance > last.maxClearance) {
+                    last.maxClearance = first.maxClearance;
+                    last.best = first.best;
+                }
+                if (first.safeStart) {
+                    if (!last.safeStart) last.safeStart = first.safeStart;
+                    last.safeEnd = first.safeEnd;
+                }
+                last.hasSafeCore = (last.safeStart !== null);
+
+                next.windows.shift();
+            }
+            return days;
         }
 
         // ============================================================
@@ -3101,23 +1869,25 @@
                 const dayPoints = points[i];
 
                 if (dayPoints.length === 0) {
-                    days.push({ date, points: [], series: [], windows: [], unavailable: true });
+                    days.push({ date, prevAnchor: null, nextAnchor: null, points: [], series: [], windows: [], unavailable: true });
                     continue;
                 }
 
                 const prev = points[i - 1];
                 const next = points[i + 1];
+                const prevAnchor = prev.length ? prev[prev.length - 1] : null;
+                const nextAnchor = next.length ? next[0] : null;
                 const series = generateHourlyTideData(
-                    buildInterpolationPoints(
-                        dayPoints,
-                        prev.length ? prev[prev.length - 1] : null,
-                        next.length ? next[0] : null
-                    ),
+                    buildInterpolationPoints(dayPoints, prevAnchor, nextAnchor),
                     date
                 );
 
                 days.push({
                     date: date,
+                    // The anchors travel with the day: interpolateTideHeight reads
+                    // them for moments outside the day's own first and last tide.
+                    prevAnchor: prevAnchor,
+                    nextAnchor: nextAnchor,
                     points: classifyTidePoints(dayPoints),
                     series: series,
                     windows: calculateSafeWindows(series, spanClearance, boatHeight, safetyMargin),
@@ -3128,380 +1898,764 @@
             return days;
         }
 
-        async function checkClearance() {
-            const calculationId = Date.now(); // Unique ID for this calculation
-            
-            // Clear previous results first
-            document.getElementById('resultContainer').innerHTML = '';
-            
-            const boatHeight = parseFloat(document.getElementById('boatHeight').value);
-            const safetyMargin = parseFloat(document.getElementById('safetyMargin').value);
-            const preferredTime = document.getElementById('preferredTime').value;
+        // ============================================================
+        // UI LAYER
+        // ============================================================
+        //
+        // There is no submit button: every input change recalculates the limits,
+        // the result panel, the day rows and the header figure.
+        //
+        // Times throughout are the browser's local wall clock. Tide instants are
+        // built from NZ wall-clock plus the NZ offset, and the 10-minute series is
+        // generated over local midnight-to-midnight, so the page assumes a device
+        // set to New Zealand time. That has always been the assumption here.
 
-            console.log(`\n========== CALCULATION #${calculationId} ==========`);
-            console.log('Raw preferredTime input:', preferredTime);
+        const MARGIN_STEP = 0.05;
+        const BOAT_STEP = 0.05;
+        const MARGIN_PRESETS = [0, 0.30, 0.50, 1.00];
+        const BOAT_DEFAULT = 3.50;
+        const LONG_WINDOW_MINUTES = 60;
+        const WEEK_DAYS = 7;
+        const FORTNIGHT_DAYS = 14;
 
-            if (isNaN(boatHeight) || isNaN(safetyMargin)) {
-                showToast('Please enter boat height and safety margin', 'error');
-                return;
-            }
+        const ui = {
+            date: null,          // selected day, local midnight
+            today: null,         // today, local midnight
+            time: { h: 12, m: 0 },
+            margin: 0.50,
+            boat: null,          // null until the skipper enters one
+            longOnly: false,
+            dayCount: WEEK_DAYS,
+            forecast: [],
+            forecastAll: [],
+            selectedDay: null,
+            expandedDay: null,
+            fetchedAt: null,
+            source: null,
+            stale: false,
+            busy: false
+        };
 
-            if (!preferredTime || preferredTime.trim() === '') {
-                showToast('Please enter your preferred travel time', 'error');
-                return;
-            }
+        const $ = id => document.getElementById(id);
 
-            // CRITICAL: Check if date has changed or force refresh requested
-            const dateInput = document.getElementById('tideDate').value;
-            const dateChanged = (lastLoadedDate !== dateInput);
-            const forceRefresh = document.getElementById('forceRefresh')?.checked || false;
+        // ------------------------------------------------------------ formatting
 
-            console.log('Date input:', dateInput);
-            console.log('Last loaded date:', lastLoadedDate);
-            console.log('Date changed?:', dateChanged);
-            console.log('Force refresh?:', forceRefresh);
+        function pad2(n) { return String(n).padStart(2, '0'); }
 
-            if (fullDayTideData.length === 0 || dateChanged || forceRefresh) {
-                console.log('→ Loading tide data...');
-                const success = await loadTideData();
-                if (!success) return;
-            } else {
-                console.log('→ Using cached tide data');
-            }
-
-            // CRITICAL: Parse time AFTER potential async load
-            const selectedDate = new Date(dateInput + 'T00:00:00');
-            const [hours, minutes] = preferredTime.split(':').map(Number);
-            
-            console.log('Parsing time:', preferredTime);
-            console.log('→ Hours:', hours, 'Minutes:', minutes);
-            
-            if (isNaN(hours) || isNaN(minutes)) {
-                console.error('ERROR: Failed to parse time!');
-                showToast('Invalid time format', 'error');
-                return;
-            }
-            
-            // Create fresh targetTime object
-            const targetTime = new Date(
-                selectedDate.getFullYear(), 
-                selectedDate.getMonth(), 
-                selectedDate.getDate(), 
-                hours, 
-                minutes, 
-                0
-            );
-
-            console.log('Target time created:', targetTime.toISOString());
-            console.log('Display:', targetTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false }));
-
-            // Get fresh tide calculation
-            const tideResult = interpolateTideHeight(tideData, targetTime);
-            
-            if (!tideResult) {
-                showToast('Unable to calculate tide for selected time', 'error');
-                return;
-            }
-            
-            // Check if there was an error loading adjacent day data
-            if (tideResult.error) {
-                showToast(tideResult.error, 'error');
-                console.error('Calculation failed:', tideResult.error);
-                return;
-            }
-
-            console.log('Tide calculation result:');
-            console.log('→ Height:', tideResult.height.toFixed(3), 'm');
-            console.log('→ Interpolated:', tideResult.interpolated);
-            if (tideResult.interpolated) {
-                console.log('→ Between:', tideResult.beforeTime.toLocaleTimeString(), 'and', tideResult.afterTime.toLocaleTimeString());
-            }
-
-            displayResult(boatHeight, safetyMargin, tideResult, targetTime);
-            console.log(`========== END CALCULATION #${calculationId} ==========\n`);
+        function fmtTime(date) {
+            return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
         }
 
-        function displayResult(boatHeight, safetyMargin, tideResult, requestedTime) {
-            const actualClearance = selectedSpanClearance - tideResult.height;
-            const clearanceNeeded = boatHeight + safetyMargin;
-            const spareClearance = actualClearance - clearanceNeeded;
+        // Built by hand rather than through toLocaleDateString: en-NZ renders
+        // "Wed, 2 Sept", and the design calls for "Wed 2 Sep".
+        const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-            let status, statusClass, icon, message;
-
-            if (spareClearance >= 0.5) {
-                status = 'Safe to Pass';
-                statusClass = 'safe';
-                icon = '✓';
-                message = 'You have sufficient clearance to pass safely at this time.';
-            } else if (spareClearance >= 0) {
-                status = 'Proceed with Caution';
-                statusClass = 'warning';
-                icon = '⚠';
-                message = 'Clearance is minimal. Proceed with extreme caution.';
-            } else {
-                status = 'Do Not Pass';
-                statusClass = 'danger';
-                icon = '✕';
-                message = 'Insufficient clearance. Wait for lower tide.';
-            }
-
-            const percentage = Math.min(100, Math.max(0, (clearanceNeeded / actualClearance) * 100));
-            const requestedTimeStr = requestedTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
-            
-            const tideHeightDisplay = tideResult.interpolated ? `${tideResult.height.toFixed(2)}m*` : `${tideResult.height.toFixed(2)}m`;
-            const actualClearanceDisplay = tideResult.interpolated ? `${actualClearance.toFixed(2)}m*` : `${actualClearance.toFixed(2)}m`;
-            
-            let accuracyNote = '';
-            if (tideResult.interpolated) {
-                accuracyNote = `<div class="info-panel" style="margin-top: 16px; background: rgba(91, 163, 208, 0.15); border-color: rgba(91, 163, 208, 0.3);">
-                    <p class="info-text"><strong>* Interpolated Value:</strong> Tide height calculated between ${tideResult.beforeTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false })} (${tideResult.beforeHeight.toFixed(2)}m) and ${tideResult.afterTime.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false })} (${tideResult.afterHeight.toFixed(2)}m) for maximum accuracy.</p>
-                </div>`;
-            }
-
-            document.getElementById('resultContainer').innerHTML = `
-                <div class="result-card">
-                    <div class="result-hero ${statusClass}">
-                        <div class="result-icon">${icon}</div>
-                        <div class="result-status">${status}</div>
-                        <div class="result-message">${message}</div>
-                    </div>
-                    <div class="result-body">
-                        <div class="result-row">
-                            <span class="result-label">Bridge Span</span>
-                            <span class="result-value">${selectedSpanName} (${selectedSpanClearance.toFixed(1)}m)</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="result-label">Requested Time</span>
-                            <span class="result-value">${requestedTimeStr}</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="result-label">Tide Height</span>
-                            <span class="result-value">${tideHeightDisplay}</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="result-label">Actual Clearance</span>
-                            <span class="result-value">${actualClearanceDisplay}</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="result-label">Required</span>
-                            <span class="result-value">${clearanceNeeded.toFixed(2)}m</span>
-                        </div>
-                        
-                        <div class="clearance-box">
-                            <div class="clearance-label">Spare Clearance</div>
-                            <div class="clearance-value ${spareClearance >= 0 ? 'positive' : 'negative'}">
-                                ${spareClearance >= 0 ? '+' : ''}${spareClearance.toFixed(2)}m
-                            </div>
-                        </div>
-
-                        <div class="progress-section">
-                            <div class="progress-bar">
-                                <div class="progress-fill ${statusClass}" style="width: ${percentage}%"></div>
-                            </div>
-                            <div class="progress-labels">
-                                <span>Clearance Used</span>
-                                <span>${Math.min(100, percentage).toFixed(0)}%</span>
-                            </div>
-                        </div>
-
-                        ${accuracyNote}
-
-                        <div class="info-panel" style="margin-top: ${accuracyNote ? '8px' : '24px'};">
-                            <p class="info-text"><strong>Weather Impact:</strong> Barometric pressure and wind can affect tide height. Add extra margin in adverse conditions.</p>
-                        </div>
-
-                        <div class="info-panel" style="margin-top: 8px; background: rgba(184, 230, 249, 0.15); border-color: rgba(184, 230, 249, 0.3);">
-                            <p class="info-text" style="margin-bottom: 12px;"><strong>LINZ Tide Data Points for ${requestedTime.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}:</strong></p>
-                            ${tideData.map(point => `
-                                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px;">
-                                    <span>${point.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                                    <span style="font-weight: 600;">${point.height.toFixed(2)}m</span>
-                                </div>
-                            `).join('')}
-                            <p class="info-text" style="margin-top: 12px; font-size: 12px; opacity: 0.8;">
-                                Source: <a href="https://www.linz.govt.nz/sea/tides/tide-predictions" target="_blank" style="color: var(--foam); text-decoration: underline;">LINZ Tide Predictions</a>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                ${renderTideChart(tideData, fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin, calculateSafeWindows(fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin), requestedTime)}
-            `;
+        function fmtDayShort(date) {
+            return WEEKDAYS[date.getDay()] + ' ' + date.getDate() + ' ' + MONTHS[date.getMonth()];
         }
 
-        async function findBestTimes() {
-            // Clear previous results first
-            document.getElementById('resultContainer').innerHTML = '';
-            
-            const boatHeight = parseFloat(document.getElementById('boatHeight').value);
-            const safetyMargin = parseFloat(document.getElementById('safetyMargin').value);
+        function fmtDayTiny(date) {
+            return WEEKDAYS[date.getDay()] + ' ' + date.getDate();
+        }
 
-            if (isNaN(boatHeight) || isNaN(safetyMargin)) {
-                showToast('Please enter boat height and safety margin', 'error');
-                return;
-            }
+        // A time, with the weekday attached when it falls on a different day from
+        // the moment it is being read against - a window closing at 00:30 must not
+        // look like one closing earlier the same evening.
+        function fmtTimeWithDay(when, reference) {
+            const t = fmtTime(when);
+            return dayDelta(when, reference) === 0 ? t : t + ' ' + WEEKDAYS[when.getDay()];
+        }
 
-            // CRITICAL: Check if date has changed or force refresh requested
-            const dateInput = document.getElementById('tideDate').value;
-            const dateChanged = (lastLoadedDate !== dateInput);
-            const forceRefresh = document.getElementById('forceRefresh')?.checked || false;
+        function fmtDateValue(date) {
+            return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate());
+        }
 
-            if (fullDayTideData.length === 0 || dateChanged || forceRefresh) {
-                console.log('Loading tide data for Find Times... (date changed:', dateChanged, ', force refresh:', forceRefresh, ')');
-                const success = await loadTideData();
-                if (!success) return;
-            }
+        function fmtMetres(m, dp) {
+            return (m < 0 ? '−' : '') + Math.abs(m).toFixed(dp === undefined ? 2 : dp);
+        }
 
-            const clearanceNeeded = boatHeight + safetyMargin;
-            const windows = calculateSafeWindows(fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin);
-            // Get requested time (if entered) for chart marker
-            const preferredTime = document.getElementById('preferredTime').value;
-            let reqTime = null;
-            if (preferredTime && preferredTime.includes(':')) {
-                const [rh, rm] = preferredTime.split(':').map(Number);
-                if (!isNaN(rh) && !isNaN(rm)) {
-                    const sd = new Date(dateInput + 'T00:00:00');
-                    reqTime = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate(), rh, rm, 0);
+        function fmtDuration(ms) {
+            const mins = Math.round(ms / 60000);
+            const h = Math.floor(mins / 60), m = mins % 60;
+            if (h === 0) return m + 'm';
+            return m === 0 ? h + 'h' : h + 'h ' + m + 'm';
+        }
+
+        function dayDelta(a, b) {
+            return Math.round((startOfDay(a) - startOfDay(b)) / 86400000);
+        }
+
+        function startOfDay(date) {
+            return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        }
+
+        function relativeDayLabel(date) {
+            const delta = dayDelta(date, ui.today);
+            if (delta === 0) return 'Today';
+            if (delta === 1) return 'Tomorrow';
+            if (delta === -1) return 'Yesterday';
+            return WEEKDAYS_LONG[date.getDay()];
+        }
+
+        function escapeHtml(text) {
+            return String(text).replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
+        // Today in NZ, as a local midnight. Matches the previous versions' helper.
+        function nzToday() {
+            const nz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+            return new Date(nz.getFullYear(), nz.getMonth(), nz.getDate());
+        }
+
+        // ------------------------------------------------------------ derivation
+
+        function required() {
+            return ui.boat === null ? null : ui.boat + ui.margin;
+        }
+
+        // The tide levels the verdict turns on: at or below cautionTide the boat
+        // fits at all; at or below safeTide it fits with SAFE_SPARE_M to spare.
+        function tideLimits() {
+            const need = required();
+            if (need === null) return null;
+            return {
+                caution: selectedSpanClearance - need,
+                safe: selectedSpanClearance - need - SAFE_SPARE_M
+            };
+        }
+
+        function statusFor(spare) {
+            if (spare === null) return 'unknown';
+            if (spare < 0) return 'danger';
+            return spare >= SAFE_SPARE_M ? 'safe' : 'caution';
+        }
+
+        const STATUS_WORD = { safe: 'Safe', caution: 'Caution', danger: 'Danger', unknown: '—' };
+
+        function selectedMoment() {
+            return new Date(ui.date.getFullYear(), ui.date.getMonth(), ui.date.getDate(), ui.time.h, ui.time.m, 0);
+        }
+
+        // Tide height at a moment, using the day's own tide points and its
+        // adjacent-day anchors, so moments before the first tide or after the last
+        // are interpolated rather than held flat.
+        function tideAtMoment(day, when) {
+            if (!day || day.unavailable || day.points.length === 0) return null;
+            prevDayLastPoint = day.prevAnchor;
+            nextDayFirstPoint = day.nextAnchor;
+            const result = interpolateTideHeight(day.points, when);
+            if (!result || result.height === null || !Number.isFinite(result.height)) return null;
+            return result;
+        }
+
+        function tideDirection(reading) {
+            if (!reading || !reading.interpolated) return '';
+            return reading.afterHeight > reading.beforeHeight ? 'rising' : 'falling';
+        }
+
+        function windowMinutes(win) {
+            // Samples are 10 minutes apart and mark passable moments, so the window
+            // runs to the end of its last passable sample.
+            return (win.end.time - win.start.time) / 60000 + 10;
+        }
+
+        function windowsToShow(day) {
+            if (!day || day.unavailable) return [];
+            return ui.longOnly
+                ? day.windows.filter(w => windowMinutes(w) >= LONG_WINDOW_MINUTES)
+                : day.windows;
+        }
+
+        function windowStatus(win) {
+            return win.hasSafeCore ? 'safe' : 'caution';
+        }
+
+        function findDay(date) {
+            return ui.forecast.find(d => dayDelta(d.date, date) === 0) || null;
+        }
+
+        function windowContaining(day, when) {
+            if (!day) return null;
+            return day.windows.find(w => when >= w.start.time && when <= w.end.time) || null;
+        }
+
+        // The first window starting at or after `when`, searched forward through the
+        // loaded range. Returns null if the range holds none.
+        function nextWindowAfter(when) {
+            for (const day of ui.forecast) {
+                if (day.unavailable) continue;
+                for (const win of day.windows) {
+                    if (win.end.time >= when) return { day, win };
                 }
             }
-
-            displayBestTimes(windows, clearanceNeeded, boatHeight, safetyMargin, reqTime);
+            return null;
         }
 
-        function displayBestTimes(windows, clearanceNeeded, boatHeight, safetyMargin, requestedTime) {
-            const container = document.getElementById('resultContainer');
-            
-            if (windows.length === 0) {
-                container.innerHTML = `
-                    <div class="no-times-card">
-                        <div class="no-times-icon">🛑</div>
-                        <div class="no-times-title">No Safe Passage Times</div>
-                        <div class="no-times-message">
-                            Your boat requires ${clearanceNeeded.toFixed(1)}m clearance. 
-                            The ${selectedSpanName} span (${selectedSpanClearance.toFixed(1)}m) 
-                            cannot accommodate this on the selected date.
-                        </div>
-                        <div class="suggestions">
-                            <div class="suggestions-title">Try These Options</div>
-                            <div class="suggestion">Select a different date with lower tides</div>
-                            <div class="suggestion">Use the HIGH span if currently using IN/OUT</div>
-                            <div class="suggestion">Reduce safety margin (not recommended)</div>
-                            <div class="suggestion">Consider an alternative route</div>
-                        </div>
-                    </div>
-                `;
+        // ------------------------------------------------------------- rendering
+
+        function renderHeader() {
+            const now = new Date();
+            const today = findDay(now);
+            const reading = tideAtMoment(today, now);
+
+            if (!reading) {
+                $('gapNowFigure').innerHTML = '&mdash;';
+                $('gapNowWhen').textContent = ui.busy ? 'Loading tide data…' : 'Tide data unavailable';
                 return;
             }
 
-            const windowsHTML = windows.map((window, idx) => {
-                const duration = (window.end.time - window.start.time) / (1000 * 60 * 60);
-                const startStr = window.start.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
-                const endStr = window.end.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
-                const tideDirection = window.end.tideHeight > window.start.tideHeight ? '↗ Rising' : '↘ Falling';
-                
-                return `
-                    <div class="time-window">
-                        <div class="window-header">
-                            <div class="window-time-range">
-                                <div class="window-time">${startStr} – ${endStr}</div>
-                                <div class="window-duration">${Math.round(duration)}h window ${tideDirection}</div>
-                            </div>
-                            <div class="window-min-badge">
-                                <div class="badge-label">Min</div>
-                                <div class="badge-value">+${window.minClearance.toFixed(2)}m</div>
-                            </div>
-                        </div>
-                        <div class="window-details">
-                            <div class="detail-box">
-                                <div class="detail-label">Window Start</div>
-                                <div class="detail-value">+${window.start.spareClearance.toFixed(2)}m</div>
-                                <div class="detail-subtext">Tide: ${window.start.tideHeight.toFixed(2)}m</div>
-                            </div>
-                            <div class="detail-box">
-                                <div class="detail-label">Window End</div>
-                                <div class="detail-value">+${window.end.spareClearance.toFixed(2)}m</div>
-                                <div class="detail-subtext">Tide: ${window.end.tideHeight.toFixed(2)}m</div>
-                            </div>
-                        </div>
-                        <div style="font-size: 11px; opacity: 0.6; margin-top: 12px; text-align: center;">
-                            Clearance values include boat height (${clearanceNeeded.toFixed(1)}m total)
-                        </div>
-                    </div>
-                `;
+            const gap = selectedSpanClearance - reading.height;
+            const dir = tideDirection(reading);
+
+            // Deliberately the bridge gap alone: no verdict and no clearance claim,
+            // because those depend on a boat height the skipper may not have given.
+            $('gapNowFigure').innerHTML = fmtMetres(gap) + '<span class="unit"> m</span>';
+            $('gapNowWhen').textContent = fmtDayShort(now) + ', ' + fmtTime(now) +
+                ' · tide ' + fmtMetres(reading.height) + ' m' + (dir ? ', ' + dir : '');
+        }
+
+        function renderResult() {
+            const wrap = $('resultWrap');
+            const when = selectedMoment();
+            const day = ui.selectedDay;
+            const reading = tideAtMoment(day, when);
+
+            if (!reading) {
+                wrap.innerHTML = '<div class="limits">' +
+                    (day && day.unavailable
+                        ? 'No published tide predictions for this date.'
+                        : 'Waiting for tide data for this date.') +
+                    '</div>';
+                return;
+            }
+
+            const gap = selectedSpanClearance - reading.height;
+            const need = required();
+            const dir = tideDirection(reading);
+            const spanCaps = escapeHtml(selectedSpanName);
+
+            if (need === null) {
+                // No boat height yet, so there is a gap to report but no verdict.
+                wrap.innerHTML =
+                    '<div class="result caution">' +
+                        '<div class="result-head">' +
+                            '<span class="result-when">' + escapeHtml(fmtTime(when) + ' on ' + fmtDayShort(when)) + '</span>' +
+                            '<span class="result-pill">Gap only</span>' +
+                        '</div>' +
+                        '<div class="result-figures">' +
+                            '<div class="result-figure">' +
+                                '<span class="value num">' + fmtMetres(gap) + '<span class="unit"> m</span></span>' +
+                                '<span class="caption">Gap under the ' + spanCaps + ' span</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="result-rule"></div>' +
+                        '<span class="result-detail"><b>Tide ' + fmtMetres(reading.height) + ' m</b>' +
+                            (dir ? ' ' + dir : '') +
+                            ' · enter your boat height above for a verdict.</span>' +
+                    '</div>';
+                return;
+            }
+
+            const spare = gap - need;
+            const status = statusFor(spare);
+            const limits = tideLimits();
+            const win = windowContaining(day, when);
+
+            let tail;
+            if (status === 'danger') {
+                tail = renderShortfallTail(when, limits);
+            } else {
+                const closesAt = win ? new Date(win.end.time.getTime() + 10 * 60000) : null;
+                const safeUntil = win && win.safeEnd ? new Date(win.safeEnd.time.getTime() + 10 * 60000) : null;
+                const parts = [];
+                if (safeUntil) parts.push('safe until ' + fmtTimeWithDay(safeUntil, when));
+                if (closesAt) parts.push('closed from ' + fmtTimeWithDay(closesAt, when));
+                tail = parts.length ? ' · ' + parts.join(', ') : '';
+                tail = '<br><b>Tide ' + fmtMetres(reading.height) + ' m</b>' + (dir ? ' ' + dir : '') + tail;
+            }
+
+            const secondFigure = status === 'danger'
+                ? { value: fmtMetres(spare), caption: 'Short of what you need' }
+                : { value: fmtMetres(spare), caption: 'Spare above your boat' };
+
+            wrap.innerHTML =
+                '<div class="result ' + status + '">' +
+                    '<div class="result-head">' +
+                        '<span class="result-when">' + escapeHtml(fmtTime(when) + ' on ' + fmtDayShort(when)) + '</span>' +
+                        '<span class="result-pill">' + STATUS_WORD[status] + '</span>' +
+                    '</div>' +
+                    '<div class="result-figures">' +
+                        '<div class="result-figure">' +
+                            '<span class="value num">' + fmtMetres(gap) + '<span class="unit"> m</span></span>' +
+                            '<span class="caption">Gap under the ' + spanCaps + ' span</span>' +
+                        '</div>' +
+                        '<div class="result-divide"></div>' +
+                        '<div class="result-figure">' +
+                            '<span class="value num">' + secondFigure.value + '<span class="unit"> m</span></span>' +
+                            '<span class="caption">' + secondFigure.caption + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="result-rule"></div>' +
+                    '<span class="result-detail"><b>Required ' + fmtMetres(need) + ' m</b> — boat ' +
+                        fmtMetres(ui.boat) + ' m + ' + fmtMetres(ui.margin) + ' m margin' + tail + '</span>' +
+                '</div>' +
+                renderLimitsLine(reading, limits) +
+                (status === 'danger' ? renderNextPassage(when) : '');
+        }
+
+        // The shortfall panel never prints a spare figure: it says how much too tall
+        // the boat is, and what the tide has to do about it.
+        function renderShortfallTail(when, limits) {
+            return '<br>Waiting on the tide: it must fall to ' + fmtMetres(limits.caution) +
+                ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m for ' +
+                fmtMetres(SAFE_SPARE_M) + ' m spare.';
+        }
+
+        function renderLimitsLine(reading, limits) {
+            if (!limits) return '';
+            const dir = tideDirection(reading);
+            const safeLimit = limits.safe;
+            const lead = safeLimit >= 0
+                ? 'Safe while the tide is under ' + fmtMetres(safeLimit) + ' m, caution up to ' +
+                  fmtMetres(limits.caution) + ' m, danger above.'
+                : (limits.caution >= 0
+                    ? 'Caution while the tide is under ' + fmtMetres(limits.caution) +
+                      ' m, danger above. This boat never gets ' + fmtMetres(SAFE_SPARE_M) +
+                      ' m of spare under this span.'
+                    : 'This boat does not fit under the ' + escapeHtml(selectedSpanName) +
+                      ' span at any tide.');
+            return '<div class="limits">' + lead + ' Now ' + fmtMetres(reading.height) + ' m' +
+                (dir ? ' and ' + dir : '') + '.</div>';
+        }
+
+        function renderNextPassage(when) {
+            const found = nextWindowAfter(when);
+            if (!found) {
+                return '<div class="next-passage"><span class="headline">No passage in the next ' +
+                    ui.dayCount + ' days</span><span class="sub">Try the HIGH span, or a smaller safety margin.</span></div>';
+            }
+            const { day, win } = found;
+            const opensAt = win.start.time > when ? win.start.time : when;
+            const delta = dayDelta(day.date, startOfDay(when));
+            const dayWord = delta === 0 ? '' : delta === 1 ? ' tomorrow' : ' on ' + fmtDayShort(day.date);
+            const sub = win.hasSafeCore
+                ? 'Caution from ' + fmtTime(win.start.time) + ', safe ' +
+                  fmtTime(win.safeStart.time) + ' – ' + fmtTime(win.safeEnd.time)
+                : 'Caution throughout, until ' + fmtTime(win.end.time);
+            return '<div class="next-passage">' +
+                '<span class="headline">Next passage ' + fmtTime(opensAt) + dayWord + '</span>' +
+                '<span class="sub">' + sub + '</span></div>';
+        }
+
+        function renderProvenance() {
+            const el = $('provenance');
+            const when = $('provenanceWhen');
+            const years = TideDataService.config.availableYears;
+            const validTo = '31 Dec ' + years[years.length - 1];
+
+            let lead;
+            if (!ui.fetchedAt) lead = 'Loading…';
+            else if (ui.source === 'bundled') lead = 'Bundled with the app';
+            else if (ui.source === 'cache') lead = 'From this device’s copy, saved ' + fmtTime(ui.fetchedAt);
+            else lead = 'Fetched ' + fmtTime(ui.fetchedAt) + ' today';
+
+            el.classList.toggle('stale', ui.stale);
+            when.textContent = lead + ' · predictions valid to ' + validTo +
+                (ui.stale ? ' · could not refresh, showing the saved copy' : '');
+        }
+
+        function renderDays() {
+            const host = $('days');
+            $('daysHeading').textContent = 'Next ' + ui.dayCount + ' days';
+
+            const legend =
+                '<div class="legend">' +
+                    '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) + ' m spare</span>' +
+                    '<span><span class="dot caution"></span>Caution</span>' +
+                    '<span><span class="dot danger"></span>Danger</span>' +
+                '</div>';
+
+            if (required() === null) {
+                host.innerHTML = legend +
+                    '<div class="day"><div class="day-empty">Enter your boat height above to see passage windows.</div></div>';
+                return;
+            }
+
+            const rows = ui.forecast.map(day => {
+                const isToday = dayDelta(day.date, ui.today) === 0;
+                const shown = windowsToShow(day);
+                let body;
+
+                if (day.unavailable) {
+                    body = '<div class="day-empty">No published predictions</div>';
+                } else if (shown.length === 0) {
+                    body = '<div class="day-empty">' +
+                        (day.windows.length ? 'No window over an hour' : 'No passage this day') + '</div>';
+                } else {
+                    body = '<div class="day-windows">' + shown.map(win => renderWindowLine(day, win)).join('') + '</div>';
+                }
+
+                return '<button type="button" class="day' + (isToday ? ' today' : '') +
+                    '" data-date="' + fmtDateValue(day.date) + '">' +
+                    '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' +
+                    body + '</button>';
             }).join('');
 
-            container.innerHTML = `
-                <div class="windows-container">
-                    <div class="windows-header">
-                        <div class="windows-title">${windows.length} Safe ${windows.length === 1 ? 'Window' : 'Windows'}</div>
-                    </div>
-                    ${windowsHTML}
-                    <div class="info-panel">
-                        <p class="info-text"><strong>Understanding the Data:</strong> "Min" shows minimum clearance during the window. Start/End values show spare clearance at each time. Choose times with higher clearance for maximum safety.</p>
-                    </div>
+            const more = ui.dayCount === WEEK_DAYS
+                ? '<button type="button" class="days-more" id="daysMore">Show all 14 days &rarr;</button>'
+                : '<button type="button" class="days-more" id="daysMore">Show 7 days only</button>';
 
-                    <div class="info-panel" style="margin-top: 16px; background: rgba(184, 230, 249, 0.15); border-color: rgba(184, 230, 249, 0.3);">
-                        <p class="info-text" style="margin-bottom: 12px;"><strong>LINZ Tide Data Points for Selected Date:</strong></p>
-                        ${tideData.map(point => `
-                            <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px;">
-                                <span>${point.time.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                                <span style="font-weight: 600;">${point.height.toFixed(2)}m</span>
-                            </div>
-                        `).join('')}
-                        <p class="info-text" style="margin-top: 12px; font-size: 12px; opacity: 0.8;">
-                            Source: <a href="https://www.linz.govt.nz/sea/tides/tide-predictions" target="_blank" style="color: var(--foam); text-decoration: underline;">LINZ Tide Predictions</a>
-                        </p>
-                    </div>
-                </div>
-                ${renderTideChart(tideData, fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin, windows, requestedTime)}
-            `;
+            host.innerHTML = legend + rows + more;
         }
-        
-        // Auto-add colon in time input with proper backspace/delete support
-        const timeInput = document.getElementById('preferredTime');
-        let previousTimeValue = '';
 
-        timeInput.addEventListener('input', function(e) {
-            const currentValue = e.target.value;
-            const rawDigits = currentValue.replace(/[^0-9]/g, '');
+        function renderWindowLine(day, win) {
+            const now = new Date();
+            const status = windowStatus(win);
+            const closesAt = new Date(win.end.time.getTime() + 10 * 60000);
+            const isNow = now >= win.start.time && now <= closesAt;
 
-            // Detect if user is deleting (current value shorter than previous)
-            const isDeleting = currentValue.length < previousTimeValue.length;
-
-            if (isDeleting) {
-                // Allow deletion - just clean up non-digits but don't auto-format
-                // This lets users delete back past the colon freely
-                if (rawDigits.length <= 2) {
-                    // If 2 or fewer digits, show without colon
-                    e.target.value = rawDigits;
-                } else {
-                    // If more than 2 digits, keep the colon format
-                    e.target.value = rawDigits.slice(0, 2) + ':' + rawDigits.slice(2, 4);
-                }
+            let note;
+            if (!win.hasSafeCore) {
+                note = 'caution throughout';
+            } else if (isNow) {
+                note = 'now · safe to ' +
+                    fmtTimeWithDay(new Date(win.safeEnd.time.getTime() + 10 * 60000), win.start.time);
             } else {
-                // User is adding characters - auto-format with colon
-                if (rawDigits.length >= 2) {
-                    e.target.value = rawDigits.slice(0, 2) + ':' + rawDigits.slice(2, 4);
-                } else {
-                    e.target.value = rawDigits;
+                note = 'safe ' + fmtTime(win.safeStart.time) + '–' +
+                    fmtTimeWithDay(new Date(win.safeEnd.time.getTime() + 10 * 60000), win.start.time);
+            }
+
+            return '<span class="win">' +
+                '<span class="dot ' + status + '"></span>' +
+                '<span class="win-times num">' + fmtTime(win.start.time) + ' – ' +
+                    fmtTimeWithDay(closesAt, win.start.time) + '</span>' +
+                '<span class="win-note">' + note + '</span>' +
+            '</span>';
+        }
+
+        function renderBest() {
+            const el = $('best');
+            if (required() === null) { el.classList.add('hidden'); return; }
+
+            let best = null;
+            for (const day of ui.forecast) {
+                for (const win of day.windows) {
+                    const mins = windowMinutes(win);
+                    if (!best || mins > best.mins) best = { day, win, mins };
                 }
             }
 
-            previousTimeValue = e.target.value;
-        });
+            if (!best) { el.classList.add('hidden'); return; }
 
-        // Handle keyboard shortcuts for clearing
-        timeInput.addEventListener('keydown', function(e) {
-            // Ctrl+A followed by Delete/Backspace, or selecting all and typing
-            // is already handled naturally by the browser
+            el.classList.remove('hidden');
+            el.innerHTML =
+                '<span class="headline">' + escapeHtml(fmtDayTiny(best.day.date)) + ' · ' +
+                    fmtTime(best.win.start.time) + ' – ' +
+                    fmtTimeWithDay(new Date(best.win.end.time.getTime() + 10 * 60000), best.win.start.time) + '</span>' +
+                '<span class="sub">Longest window in the next ' + ui.dayCount + ' days, ' +
+                    fmtDuration(best.mins * 60000) + '</span>';
+        }
 
-            // Escape key clears the field
-            if (e.key === 'Escape') {
-                e.target.value = '';
-                previousTimeValue = '';
+        function renderControls() {
+            $('dateReadout').textContent = fmtDayShort(ui.date);
+            $('dateRelative').textContent = relativeDayLabel(ui.date);
+            $('tideDate').value = fmtDateValue(ui.date);
+
+            $('timeReadout').textContent = pad2(ui.time.h) + ':' + pad2(ui.time.m);
+            $('preferredTime').value = pad2(ui.time.h) + ':' + pad2(ui.time.m);
+
+            $('marginReadout').innerHTML = fmtMetres(ui.margin) + '<span class="unit"> m</span>';
+            $('boatReadout').innerHTML = ui.boat === null
+                ? '<span style="font-size:15px; font-weight:600; color:var(--muted)">not set</span>'
+                : fmtMetres(ui.boat) + '<span class="unit"> m</span>';
+
+            Array.from($('marginChips').children).forEach(chip => {
+                chip.setAttribute('aria-pressed', String(Math.abs(Number(chip.dataset.value) - ui.margin) < 1e-9));
+            });
+            Array.from($('spanGroup').children).forEach(btn => {
+                btn.setAttribute('aria-pressed', String(btn.dataset.span === selectedSpanId));
+            });
+            $('longOnly').setAttribute('aria-pressed', String(ui.longOnly));
+        }
+
+        function renderAll() {
+            renderControls();
+            renderHeader();
+            renderResult();
+            renderProvenance();
+            renderDays();
+            renderBest();
+        }
+
+        // ------------------------------------------------------------ data loading
+
+        async function recompute(forceRefresh) {
+            ui.busy = true;
+            document.body.classList.add('busy');
+            hideErrorPanel();
+
+            const boat = ui.boat === null ? 0 : ui.boat;
+
+            try {
+                // One day beyond the range, so a window running past midnight on the
+                // last visible day can still be joined to its tail.
+                ui.forecastAll = await computeDayForecast(
+                    ui.today, ui.dayCount + 1, selectedSpanClearance, boat, ui.margin, !!forceRefresh
+                );
+                stitchWindowsAcrossMidnight(ui.forecastAll);
+                ui.forecast = ui.forecastAll.slice(0, ui.dayCount);
+
+                const inRange = findDay(ui.date);
+                if (inRange) {
+                    ui.selectedDay = inRange;
+                } else {
+                    const pair = await computeDayForecast(
+                        ui.date, 2, selectedSpanClearance, boat, ui.margin, false
+                    );
+                    stitchWindowsAcrossMidnight(pair);
+                    ui.selectedDay = pair[0];
+                }
+
+                ui.source = TideDataService.lastDataSource;
+                ui.stale = ui.source === 'cache' && !!forceRefresh;
+                ui.fetchedAt = new Date();
+
+                if (forceRefresh) {
+                    showToast(ui.stale ? 'Could not refresh — showing the saved copy' : 'Tide data refreshed');
+                }
+            } catch (err) {
+                const message = (err && err.userMessage) || (err && err.message) ||
+                    'Could not load tide predictions.';
+                showErrorPanel(message, TideDataService.getCacheStatus().years.length > 0);
+            } finally {
+                ui.busy = false;
+                document.body.classList.remove('busy');
+                renderAll();
             }
-        });
-    </script>
+        }
 
+        // Recalculate windows from data already in hand. Changing the span, margin or
+        // boat height does not need another fetch.
+        function recalcFromLoaded() {
+            const boat = ui.boat === null ? 0 : ui.boat;
+            const selectedOutsideRange = ui.selectedDay && !findDay(ui.selectedDay.date);
+
+            for (const day of ui.forecastAll) {
+                if (day.unavailable) continue;
+                day.windows = calculateSafeWindows(day.series, selectedSpanClearance, boat, ui.margin);
+            }
+            stitchWindowsAcrossMidnight(ui.forecastAll);
+            ui.forecast = ui.forecastAll.slice(0, ui.dayCount);
+
+            if (selectedOutsideRange && !ui.selectedDay.unavailable) {
+                ui.selectedDay.windows = calculateSafeWindows(
+                    ui.selectedDay.series, selectedSpanClearance, boat, ui.margin
+                );
+            }
+            renderAll();
+        }
+
+        // ------------------------------------------------------------- feedback
+
+        let toastTimer = null;
+        function showToast(message) {
+            const el = $('toast');
+            el.textContent = message;
+            el.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+        }
+
+        function showErrorPanel(message, cacheAvailable) {
+            $('errorBody').textContent = message;
+            $('errorCached').classList.toggle('hidden', !cacheAvailable);
+            $('errorPanel').classList.remove('hidden');
+        }
+
+        function hideErrorPanel() {
+            $('errorPanel').classList.add('hidden');
+        }
+
+        // -------------------------------------------------------------- storage
+
+        function saveSetting(key, value) {
+            try { localStorage.setItem(key, String(value)); } catch (e) { /* private mode */ }
+        }
+
+        function readSetting(key) {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        }
+
+        // ---------------------------------------------------------------- wiring
+
+        function setDate(date) {
+            const years = TideDataService.config.availableYears;
+            const min = new Date(years[0], 0, 1);
+            const max = new Date(years[years.length - 1], 11, 31);
+            if (date < min) date = min;
+            if (date > max) date = max;
+            ui.date = startOfDay(date);
+            recompute(false);
+        }
+
+        function setSpan(spanId) {
+            const bridge = BridgeConfig.getCurrentBridge();
+            const span = bridge.spans[spanId];
+            if (!span) return;
+            selectedSpanId = spanId;
+            selectedSpanName = span.name;
+            selectedSpanClearance = span.clearance;
+            saveSetting('spanId', spanId);
+            recalcFromLoaded();
+        }
+
+        function stepValue(which, delta) {
+            if (which === 'margin') {
+                ui.margin = Math.max(0, Math.round((ui.margin + delta * MARGIN_STEP) * 100) / 100);
+                saveSetting('safetyMargin', ui.margin);
+            } else {
+                const from = ui.boat === null ? BOAT_DEFAULT - delta * BOAT_STEP : ui.boat;
+                ui.boat = Math.max(0, Math.round((from + delta * BOAT_STEP) * 100) / 100);
+                saveSetting('boatHeight', ui.boat);
+            }
+            recalcFromLoaded();
+        }
+
+        function buildSpanButtons() {
+            const bridge = BridgeConfig.getCurrentBridge();
+            $('spanGroup').innerHTML = Object.entries(bridge.spans).map(([id, span]) => {
+                const label = span.name === 'IN/OUT' ? 'In/Out' : 'High';
+                return '<button type="button" data-span="' + id + '" aria-pressed="false">' +
+                    label + ' ' + span.clearance.toFixed(1) + ' m</button>';
+            }).join('');
+        }
+
+        function buildMarginChips() {
+            $('marginChips').innerHTML = MARGIN_PRESETS.map(v =>
+                '<button type="button" data-value="' + v + '" aria-pressed="false">' +
+                (v === 0 ? '0' : v.toFixed(2)) + '</button>'
+            ).join('');
+        }
+
+        // Long-press on a stepper repeats, so 0.05 m steps are not a chore.
+        function bindRepeat(button, action) {
+            let holdTimer = null, repeatTimer = null;
+            const stop = () => { clearTimeout(holdTimer); clearInterval(repeatTimer); };
+            button.addEventListener('pointerdown', () => {
+                holdTimer = setTimeout(() => { repeatTimer = setInterval(action, 90); }, 450);
+            });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+                button.addEventListener(ev, stop));
+            button.addEventListener('click', action);
+        }
+
+        function wire() {
+            $('datePrev').addEventListener('click', () => setDate(addDays(ui.date, -1)));
+            $('dateNext').addEventListener('click', () => setDate(addDays(ui.date, 1)));
+
+            $('tideDate').addEventListener('change', e => {
+                if (!e.target.value) return;
+                const [y, m, d] = e.target.value.split('-').map(Number);
+                setDate(new Date(y, m - 1, d));
+            });
+
+            $('preferredTime').addEventListener('change', e => {
+                if (!e.target.value) return;
+                const [h, m] = e.target.value.split(':').map(Number);
+                if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+                ui.time = { h, m };
+                renderAll();
+            });
+
+            $('nowBtn').addEventListener('click', () => {
+                const now = new Date();
+                ui.time = { h: now.getHours(), m: now.getMinutes() };
+                if (dayDelta(ui.date, ui.today) !== 0) { setDate(ui.today); return; }
+                renderAll();
+            });
+
+            $('spanGroup').addEventListener('click', e => {
+                const btn = e.target.closest('button[data-span]');
+                if (btn) setSpan(btn.dataset.span);
+            });
+
+            $('marginChips').addEventListener('click', e => {
+                const btn = e.target.closest('button[data-value]');
+                if (!btn) return;
+                ui.margin = Number(btn.dataset.value);
+                saveSetting('safetyMargin', ui.margin);
+                recalcFromLoaded();
+            });
+
+            document.querySelectorAll('button[data-step]').forEach(btn => {
+                bindRepeat(btn, () => stepValue(btn.dataset.step, Number(btn.dataset.delta)));
+            });
+
+            $('longOnly').addEventListener('click', () => {
+                ui.longOnly = !ui.longOnly;
+                renderDays();
+                renderControls();
+            });
+
+            $('days').addEventListener('click', e => {
+                if (e.target.closest('#daysMore')) {
+                    ui.dayCount = ui.dayCount === WEEK_DAYS ? FORTNIGHT_DAYS : WEEK_DAYS;
+                    recompute(false);
+                    return;
+                }
+                const row = e.target.closest('.day[data-date]');
+                if (!row) return;
+                const [y, m, d] = row.dataset.date.split('-').map(Number);
+                setDate(new Date(y, m - 1, d));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            $('refreshBtn').addEventListener('click', () => recompute(true));
+            $('errorRetry').addEventListener('click', () => recompute(true));
+            $('errorCached').addEventListener('click', () => recompute(false));
+
+            // The header figure is a clock reading; keep it honest without a reload.
+            setInterval(() => { if (!ui.busy) renderHeader(); }, 60000);
+        }
+
+        async function init() {
+            ui.today = nzToday();
+            ui.date = ui.today;
+
+            const now = new Date();
+            ui.time = { h: now.getHours(), m: now.getMinutes() };
+
+            const savedBoat = parseFloat(readSetting('boatHeight'));
+            if (Number.isFinite(savedBoat) && savedBoat > 0) ui.boat = savedBoat;
+
+            const savedMargin = parseFloat(readSetting('safetyMargin'));
+            if (Number.isFinite(savedMargin) && savedMargin >= 0) ui.margin = savedMargin;
+
+            const savedSpan = readSetting('spanId');
+            const bridge = BridgeConfig.getCurrentBridge();
+            const spanId = bridge.spans[savedSpan] ? savedSpan : bridge.defaultSpan;
+            selectedSpanId = spanId;
+            selectedSpanName = bridge.spans[spanId].name;
+            selectedSpanClearance = bridge.spans[spanId].clearance;
+
+            const years = TideDataService.config.availableYears;
+            $('tideDate').min = years[0] + '-01-01';
+            $('tideDate').max = years[years.length - 1] + '-12-31';
+
+            buildSpanButtons();
+            buildMarginChips();
+            wire();
+            renderControls();
+
+            await recompute(false);
+        }
+
+        init();
+    </script>
     <!-- Privacy-friendly, cookieless analytics -->
     <script data-goatcounter="https://tidechecker.goatcounter.com/count"
             async src="//gc.zgo.at/count.js"></script>

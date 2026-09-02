@@ -78,7 +78,8 @@ const FUNCTIONS = [
     'classifyTidePoints',
     'getYearCsv',
     'getDayPoints',
-    'computeDayForecast'
+    'computeDayForecast',
+    'stitchWindowsAcrossMidnight'
 ];
 
 // ------------------------------------------------------------------ sandbox
@@ -120,6 +121,7 @@ const {
     isLinzDataRow, parseLinzCsv, ruleOfTwelfthsHeight, buildInterpolationPoints,
     generateHourlyTideData, getNZTimezoneOffset, interpolateTideHeight,
     calculateSafeWindows, classifyTidePoints, computeDayForecast, addDays,
+    stitchWindowsAcrossMidnight,
     TideDataService, setAdjacent
 } = api;
 
@@ -703,6 +705,78 @@ async function main() {
         const back = addDays(new Date(2026, 3, 5), -1);
         assert.strictEqual(back.getDate(), 4);
         assert.strictEqual(back.getHours(), 0);
+    });
+
+    console.log('\nWindows that run past midnight');
+
+    await test('a window crossing midnight is one window, carried on the day it opens', async () => {
+        resetState();
+        serveBundled();
+        const days = await computeDayForecast(new Date(2026, 8, 6), 4, 6.2, 3.9, 0.5);
+
+        const crossesBefore = days.some((d, i) =>
+            i > 0 &&
+            d.windows.length &&
+            d.windows[0].start.time.getHours() === 0 && d.windows[0].start.time.getMinutes() === 0);
+        assert.ok(crossesBefore, 'fixture no longer has a window running past midnight');
+
+        stitchWindowsAcrossMidnight(days);
+
+        days.forEach((day, i) => {
+            if (i === 0 || !day.windows.length) return;
+            const prev = days[i - 1];
+            const prevLast = prev.windows[prev.windows.length - 1];
+            const first = day.windows[0];
+            const orphan = first.start.time.getHours() === 0 && first.start.time.getMinutes() === 0 &&
+                prevLast && prevLast.end.time.getHours() === 23 && prevLast.end.time.getMinutes() === 50;
+            assert.ok(!orphan, 'day ' + i + ' still carries the tail of the previous day\'s window');
+        });
+
+        const carried = days.some(d => d.windows.some(w => w.end.time.getDate() !== w.start.time.getDate()));
+        assert.ok(carried, 'expected at least one window to end on the day after it opened');
+    });
+
+    await test('stitching keeps the joined window internally consistent', async () => {
+        resetState();
+        serveBundled();
+        const days = stitchWindowsAcrossMidnight(
+            await computeDayForecast(new Date(2026, 8, 6), 4, 6.2, 3.9, 0.5));
+
+        for (const day of days) {
+            for (const w of day.windows) {
+                assert.ok(w.end.time >= w.start.time, 'window ends before it starts');
+                assert.ok(w.minClearance <= w.maxClearance);
+                assert.strictEqual(w.hasSafeCore, w.safeStart !== null);
+                if (w.safeStart) {
+                    assert.ok(w.safeStart.time >= w.start.time && w.safeEnd.time <= w.end.time,
+                        'safe core falls outside its window');
+                    assert.ok(w.safeEnd.time >= w.safeStart.time);
+                }
+            }
+        }
+    });
+
+    await test('stitching leaves windows that genuinely end at midnight alone', () => {
+        // Two days whose windows do not touch the boundary: nothing should merge.
+        const mk = (y, mo, d, hStart, hEnd) => {
+            const pts = [];
+            for (let h = hStart; h <= hEnd; h++) {
+                pts.push({ time: new Date(y, mo, d, h, 0), tideHeight: 0.5, actualClearance: 5.7, spareClearance: 1.3 });
+            }
+            return {
+                start: pts[0], end: pts[pts.length - 1], best: pts[0],
+                minClearance: 1.3, maxClearance: 1.3,
+                safeStart: pts[0], safeEnd: pts[pts.length - 1], hasSafeCore: true
+            };
+        };
+        const days = [
+            { date: new Date(2026, 8, 6), unavailable: false, windows: [mk(2026, 8, 6, 10, 14)] },
+            { date: new Date(2026, 8, 7), unavailable: false, windows: [mk(2026, 8, 7, 11, 15)] }
+        ];
+        stitchWindowsAcrossMidnight(days);
+        assert.strictEqual(days[0].windows.length, 1);
+        assert.strictEqual(days[1].windows.length, 1);
+        assert.strictEqual(days[0].windows[0].end.time.getDate(), 6);
     });
 
     console.log('\n' + '='.repeat(60));

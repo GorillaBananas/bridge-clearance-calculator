@@ -43,14 +43,33 @@ function extractFunction(name) {
 const ruleOfTwelfthsHeight = new Function(
     extractFunction('ruleOfTwelfthsHeight') + '\nreturn ruleOfTwelfthsHeight;')();
 
-// The span clearances the chart specifies, read back out of the app's config
+// The span clearances the chart specifies, read back out of the app's config.
+// BridgeConfig is the single place the numbers live, so read them from there
+// rather than from whatever the markup happens to say this release.
+const bridgeConfigSource = (() => {
+    const idx = html.indexOf('const BridgeConfig = {');
+    assert.ok(idx !== -1, 'could not find BridgeConfig in index.html');
+    const open = html.indexOf('{', idx);
+    let depth = 0;
+    for (let i = open; i < html.length; i++) {
+        if (html[i] === '{') depth++;
+        else if (html[i] === '}') { depth--; if (depth === 0) return html.slice(idx, i + 1) + ';'; }
+    }
+    throw new Error('unbalanced braces in BridgeConfig');
+})();
+
+const BridgeConfig = new Function(bridgeConfigSource + '\nreturn BridgeConfig;')();
+const appSpans = BridgeConfig.getCurrentBridge().spans;
+
 const IN_OUT_GAP = 6.2;
 const HIGH_GAP = IN_OUT_GAP + 0.3;
 
-assert.ok(html.includes("selectSpan('in-out', 6.2)"),
+assert.strictEqual(appSpans['in-out'].clearance, IN_OUT_GAP,
     'app IN/OUT span should be 6.2m, per the OBC chart');
-assert.ok(html.includes("selectSpan('high', 6.5)"),
+assert.strictEqual(appSpans['high'].clearance, HIGH_GAP,
     'app HIGH span should be 6.5m (6.2 + 0.3), per the OBC chart');
+assert.strictEqual(appSpans['in-out'].name, 'IN/OUT');
+assert.strictEqual(appSpans['high'].name, 'HIGH');
 
 /*
  * The chart's eleven rows. Each is:
