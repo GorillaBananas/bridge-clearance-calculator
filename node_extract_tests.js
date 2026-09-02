@@ -73,6 +73,7 @@ const FUNCTIONS = [
     'generateHourlyTideData',
     'interpolateTideHeight',
     'calculateSafeWindows',
+    'safeSpareThreshold',
     'isYearAvailable',
     'addDays',
     'classifyTidePoints',
@@ -107,11 +108,11 @@ const quietConsole = {
 
 // interpolateTideHeight reads these module-level globals in the app
 const source = 'let nextDayFirstPoint = null, prevDayLastPoint = null;\n' +
-    extractConst('SAFE_SPARE_M') + '\n' +
+    extractConst('SAFE_CUSHION_M') + '\n' +
     extractConst('yearCsvCache') + '\n' +
     FUNCTIONS.map(extractFunction).join('\n\n') + '\n\n' + extractService() +
     '\nfunction setAdjacent(prev, next) { prevDayLastPoint = prev; nextDayFirstPoint = next; }' +
-    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent, SAFE_SPARE_M, yearCsvCache };';
+    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent, SAFE_CUSHION_M, yearCsvCache };';
 
 const api = new Function('localStorage', 'fetch', 'console', 'AbortController', source)(
     localStorageStub, fetchStub, quietConsole, AbortController
@@ -120,12 +121,12 @@ const api = new Function('localStorage', 'fetch', 'console', 'AbortController', 
 const {
     isLinzDataRow, parseLinzCsv, ruleOfTwelfthsHeight, buildInterpolationPoints,
     generateHourlyTideData, getNZTimezoneOffset, interpolateTideHeight,
-    calculateSafeWindows, classifyTidePoints, computeDayForecast, addDays,
+    calculateSafeWindows, safeSpareThreshold, classifyTidePoints, computeDayForecast, addDays,
     stitchWindowsAcrossMidnight,
     TideDataService, setAdjacent
 } = api;
 
-const SAFE_SPARE_M_LOCAL = api.SAFE_SPARE_M;
+const SAFE_CUSHION_M = api.SAFE_CUSHION_M;
 
 // -------------------------------------------------------------------- runner
 
@@ -577,21 +578,25 @@ async function main() {
         }
     });
 
+    // With a margin below the floor there is a caution band; the safe core is the
+    // stretch that reaches SAFE_CUSHION_M of clearance above the bare boat.
     await test('a window reports its safe core, not just its extent', () => {
-        const data = series([1.7, 1.5, 1.2, 1.0, 1.2, 1.5, 1.75]);
-        const [w] = calculateSafeWindows(data, SPAN, BOAT, MARGIN);
+        // margin 0: fits while tide <= 2.30, clears the floor while tide <= 1.80
+        const data = series([2.2, 2.0, 1.5, 1.2, 1.5, 2.0, 2.2]);
+        const [w] = calculateSafeWindows(data, SPAN, BOAT, 0);
         assert.ok(w.hasSafeCore);
         assert.strictEqual(w.safeStart.time.getTime(), data[2].time.getTime());
         assert.strictEqual(w.safeEnd.time.getTime(), data[4].time.getTime());
         assert.ok(w.safeStart.time > w.start.time && w.safeEnd.time < w.end.time);
     });
 
-    await test('a window that never reaches 0.5m spare is caution throughout', () => {
-        const data = series([1.75, 1.6, 1.55, 1.6, 1.75]);
-        const [w] = calculateSafeWindows(data, SPAN, BOAT, MARGIN);
+    await test('a window that never clears the floor is caution throughout', () => {
+        // margin 0, so safe needs SAFE_CUSHION_M of clearance above the boat
+        const data = series([2.25, 2.1, 2.05, 2.1, 2.25]);
+        const [w] = calculateSafeWindows(data, SPAN, BOAT, 0);
         assert.strictEqual(w.hasSafeCore, false);
         assert.strictEqual(w.safeStart, null);
-        assert.ok(w.minClearance >= 0 && w.maxClearance < SAFE_SPARE_M_LOCAL);
+        assert.ok(w.minClearance >= 0 && w.maxClearance < SAFE_CUSHION_M);
     });
 
     await test('the best moment in a window is its lowest tide', () => {
@@ -615,6 +620,75 @@ async function main() {
                 assert.ok(SPAN - s.height - required >= 0);
             }
         }
+    });
+
+    console.log('\nThe safe cushion is a floor, not an addition');
+
+    // Safe means clearance above the BARE BOAT of at least max(margin, floor).
+    // The margin and the floor must never stack.
+    const clearanceForSafe = margin => Math.max(margin, SAFE_CUSHION_M);
+
+    await test('the spare still needed is whatever the margin has not covered', () => {
+        assert.strictEqual(safeSpareThreshold(0), SAFE_CUSHION_M);
+        assert.strictEqual(Math.round(safeSpareThreshold(0.3) * 100) / 100, 0.2);
+        assert.strictEqual(safeSpareThreshold(SAFE_CUSHION_M), 0);
+        assert.strictEqual(safeSpareThreshold(1.5), 0, 'a large margin must not go negative');
+    });
+
+    await test('a margin at or above the floor leaves no caution band', () => {
+        // Every passable sample must be inside the safe core: if it fits, it is safe.
+        for (const margin of [0.5, 0.75, 1.0]) {
+            const data = series([2.4, 2.0, 1.6, 1.2, 1.6, 2.0, 2.4]);
+            const windows = calculateSafeWindows(data, SPAN, BOAT, margin);
+            for (const w of windows) {
+                assert.ok(w.hasSafeCore, 'margin ' + margin + ' produced a caution-only window');
+                assert.strictEqual(w.safeStart.time.getTime(), w.start.time.getTime(),
+                    'margin ' + margin + ' left a caution shoulder at the open');
+                assert.strictEqual(w.safeEnd.time.getTime(), w.end.time.getTime(),
+                    'margin ' + margin + ' left a caution shoulder at the close');
+            }
+        }
+    });
+
+    await test('a margin below the floor leaves exactly the shortfall as caution', () => {
+        const margin = 0.3;
+        const data = series([2.4, 2.1, 1.9, 1.5, 1.9, 2.1, 2.4]);
+        const [w] = calculateSafeWindows(data, SPAN, BOAT, margin);
+
+        // fits while tide <= 6.2 - 3.9 - 0.3 = 2.00; safe while tide <= 6.2 - 3.9 - 0.5 = 1.80
+        assert.strictEqual(w.start.time.getTime(), data[2].time.getTime());
+        assert.strictEqual(w.end.time.getTime(), data[4].time.getTime());
+        assert.ok(w.hasSafeCore);
+        assert.strictEqual(w.safeStart.time.getTime(), data[3].time.getTime());
+        assert.strictEqual(w.safeEnd.time.getTime(), data[3].time.getTime());
+    });
+
+    await test('the safe boundary is the same clearance whatever the margin below the floor', () => {
+        // The tide at which a day turns safe must not move with the margin, as long
+        // as the margin is under the floor: that is the double-counting this rule
+        // exists to prevent.
+        const boundaries = [0, 0.1, 0.25, 0.4, 0.5].map(margin => {
+            const data = series(Array.from({ length: 40 }, (_, i) => 2.6 - i * 0.05));
+            const [w] = calculateSafeWindows(data, SPAN, BOAT, margin);
+            // clearance above the bare boat at the first safe sample
+            return Math.round((SPAN - w.safeStart.tideHeight - BOAT) * 100) / 100;
+        });
+        boundaries.forEach((clearance, i) => {
+            assert.ok(clearance >= SAFE_CUSHION_M - 1e-9,
+                'safe declared at only ' + clearance + ' m of clearance (case ' + i + ')');
+            assert.ok(clearance < SAFE_CUSHION_M + 0.05 + 1e-9,
+                'safe withheld until ' + clearance + ' m, more than one sample past the floor');
+        });
+    });
+
+    await test('a margin above the floor raises the safe boundary with it', () => {
+        const data = series(Array.from({ length: 40 }, (_, i) => 2.6 - i * 0.05));
+        [0.8, 1.2].forEach(margin => {
+            const [w] = calculateSafeWindows(data, SPAN, BOAT, margin);
+            const clearance = Math.round((SPAN - w.safeStart.tideHeight - BOAT) * 100) / 100;
+            assert.ok(clearance >= margin - 1e-9,
+                'margin ' + margin + ' called safe at only ' + clearance + ' m of clearance');
+        });
     });
 
     console.log('\nMulti-day forecast');

@@ -493,15 +493,22 @@
             border-top: 2px dashed var(--danger-line);
         }
         .curve-key i.safe { border-top-color: var(--caution-line); }
-        .curve-key b { font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+        .curve-key b { font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+        /* The chart and the day's extremes read as one block of context under the
+           windows, separated from them by a single rule. */
+        .day-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-top: 18px;
+            border-top: 1px solid var(--app-bg);
+        }
 
         .extremes {
             display: flex;
             flex-wrap: wrap;
             gap: 8px 18px;
-            padding: 12px 0;
-            border-top: 1px solid var(--app-bg);
-            border-bottom: 1px solid var(--app-bg);
             font-size: 12.5px;
             color: var(--muted-45);
         }
@@ -509,6 +516,7 @@
 
         .detail-window { display: flex; flex-direction: column; gap: 12px; }
         .detail-window + .detail-window { padding-top: 20px; border-top: 1px solid var(--app-bg); }
+        .day-detail > .detail-window:first-child { padding-top: 0; }
         .detail-window-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
         .detail-window-head .times { font-size: 17px; font-weight: 700; }
         .detail-window-head .dur { font-size: 12.5px; color: var(--muted); margin-left: auto; }
@@ -987,9 +995,10 @@
                     <button type="button" class="inset-btn step" data-step="margin" data-delta="1" aria-label="More safety margin">+</button>
                 </div>
                 <div class="chips" id="marginChips"></div>
-                <p class="help">Clearance you want left above the boat. Steps of 0.05&nbsp;m; set 0 to see
-                    the bare gap. A window is only called <b>safe</b> once there is a further
-                    0.50&nbsp;m on top of this &mdash; <a href="#caveats">why</a>.</p>
+                <p class="help">Clearance you want left above the boat. Steps of 0.05&nbsp;m; set 0 to
+                    see the bare gap. Set less than 0.50&nbsp;m and anything under 0.50&nbsp;m of
+                    clearance still reads as <b>caution</b> rather than safe &mdash;
+                    <a href="#caveats">why</a>.</p>
             </div>
 
             <div class="field">
@@ -1087,24 +1096,23 @@
                     the IN/OUT span, 6.5&nbsp;m for the HIGH span. <b>Spare</b> is that gap less your boat
                     height and your safety margin. Nothing here accounts for your boat's trim, its load,
                     or anything that moves in a swell.</p>
-                <p>A window is shown as <b>safe</b> only where at least 0.50&nbsp;m of spare remains,
-                    <b>caution</b> where the boat fits with less than that, and <b>danger</b> where it does
-                    not fit at all.</p>
+                <p>A window is shown as <b>safe</b> where the boat has the clearance described below,
+                    <b>caution</b> where it fits with less, and <b>danger</b> where it does not fit at
+                    all.</p>
             </div>
 
             <div>
-                <h3>The 0.50&nbsp;m for &ldquo;safe&rdquo; is on top of your safety margin</h3>
-                <p>These are two separate cushions, and they add up. Your <b>required height</b> is your
-                    boat plus the margin you set. <b>Spare</b> is whatever is left above that. The page
-                    calls a moment safe only once 0.50&nbsp;m of spare remains &mdash; it does not count
-                    your margin towards that 0.50&nbsp;m.</p>
-                <p>So with a 3.90&nbsp;m boat and a 0.30&nbsp;m margin: you require 4.20&nbsp;m and fit at
-                    all at a 4.20&nbsp;m gap, but the page only calls it safe at 4.70&nbsp;m &mdash;
-                    0.80&nbsp;m above the boat itself. Raising your margin raises both figures. It does not
-                    replace the 0.50&nbsp;m.</p>
-                <p>If your margin already reflects the cushion you want, read <b>caution</b> as &ldquo;fits,
-                    by your own margin&rdquo; rather than as a warning to stay put, and use the spare figure
-                    itself to judge.</p>
+                <h3>What &ldquo;safe&rdquo; means, and how your margin sets it</h3>
+                <p>Your margin is your decision, and the page does not add to it. A moment is called
+                    <b>safe</b> once the clearance above your boat reaches whichever is greater: the margin
+                    you set, or 0.50&nbsp;m.</p>
+                <p>So a 0.50&nbsp;m margin, or any larger one, has no caution band at all &mdash; if the boat
+                    fits by your margin, it is safe. A 0.30&nbsp;m margin fits at 0.30&nbsp;m of clearance
+                    and is safe at 0.50&nbsp;m, leaving 0.20&nbsp;m of caution between the two. A margin of
+                    0 fits at the bare gap and is safe at 0.50&nbsp;m.</p>
+                <p>The 0.50&nbsp;m floor exists because the tide figures are interpolated estimates, not
+                    measurements, and weather moves the water. It is a warning that you are close to the
+                    limit of what these numbers can tell you &mdash; not a second margin stacked on yours.</p>
             </div>
 
             <div>
@@ -2110,9 +2118,18 @@
         }
 
         // Calculate safe windows for chart display (shared between Check Now and Find Times)
-        // Spare clearance at or above this counts as "safe"; below it, and down to
-        // zero, is "caution". Below zero the boat does not fit at all.
-        const SAFE_SPARE_M = 0.5;
+        // The clearance the page wants to see above the bare boat before it calls a
+        // moment safe. This is a FLOOR on total clearance, not an addition to the
+        // skipper's own margin: someone who asks for 0.50m or more has already asked
+        // for at least this much, so the two never stack. Setting 0.30m leaves a
+        // 0.20m caution band; setting 0.50m or more leaves none at all.
+        const SAFE_CUSHION_M = 0.5;
+
+        // Spare is measured above boat + margin, so the spare still needed to reach
+        // the floor is whatever the margin has not already covered.
+        function safeSpareThreshold(safetyMargin) {
+            return Math.max(0, SAFE_CUSHION_M - safetyMargin);
+        }
 
         // A passage window is a run of CONSECUTIVE samples the boat fits under.
         // It breaks on any impassable sample: a window must never span a period the
@@ -2120,10 +2137,12 @@
         // 1.5 hours apart, so a short closure around a weak high tide was reported
         // as continuous passage.)
         //
-        // Within a window, the stretch holding at least SAFE_SPARE_M is its safe
-        // core. A window that never reaches it is caution throughout.
+        // Within a window, the stretch clearing the floor is its safe core. A window
+        // that never reaches it is caution throughout - which can only happen when
+        // the skipper set a margin below SAFE_CUSHION_M.
         function calculateSafeWindows(hourlyData, spanClearance, boatHeight, safetyMargin) {
             const clearanceNeeded = boatHeight + safetyMargin;
+            const safeSpare = safeSpareThreshold(safetyMargin);
             const windows = [];
             let current = null;
 
@@ -2163,7 +2182,7 @@
                     }
                 }
 
-                if (spare >= SAFE_SPARE_M) {
+                if (spare >= safeSpare) {
                     if (!current.safeStart) current.safeStart = point;
                     current.safeEnd = point;
                 }
@@ -2450,20 +2469,31 @@
         }
 
         // The tide levels the verdict turns on: at or below cautionTide the boat
-        // fits at all; at or below safeTide it fits with SAFE_SPARE_M to spare.
+        // fits at all; at or below safeTide it clears the boat by safeCushion().
         function tideLimits() {
             const need = required();
             if (need === null) return null;
             return {
                 caution: selectedSpanClearance - need,
-                safe: selectedSpanClearance - need - SAFE_SPARE_M
+                safe: selectedSpanClearance - need - safeSpareThreshold(ui.margin)
             };
         }
 
         function statusFor(spare) {
             if (spare === null) return 'unknown';
             if (spare < 0) return 'danger';
-            return spare >= SAFE_SPARE_M ? 'safe' : 'caution';
+            return spare >= safeSpareThreshold(ui.margin) ? 'safe' : 'caution';
+        }
+
+        // A caution band exists only where the skipper asked for less clearance than
+        // the floor. At or above it there is nothing between fitting and safe.
+        function cautionPossible() {
+            return ui.margin < SAFE_CUSHION_M;
+        }
+
+        // The clearance above the bare boat that the page calls safe.
+        function safeCushion() {
+            return Math.max(ui.margin, SAFE_CUSHION_M);
         }
 
         const STATUS_WORD = { safe: 'Safe', caution: 'Caution', danger: 'Danger', unknown: '—' };
@@ -2664,24 +2694,32 @@
         // The shortfall panel never prints a spare figure: it says how much too tall
         // the boat is, and what the tide has to do about it.
         function renderShortfallTail(when, limits) {
-            return '<span class="clause">Waiting on the tide: it must fall to ' + fmtMetres(limits.caution) +
-                ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m to be ' +
-                fmtMetres(SAFE_SPARE_M) + ' m over what you need.</span>';
+            const tail = cautionPossible()
+                ? ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m for ' +
+                  fmtMetres(safeCushion()) + ' m of clearance above your boat.'
+                : ' m before you fit, with your ' + fmtMetres(ui.margin) + ' m margin.';
+            return '<span class="clause">Waiting on the tide: it must fall to ' +
+                fmtMetres(limits.caution) + tail + '</span>';
         }
 
         function renderLimitsLine(reading, limits) {
             if (!limits) return '';
             const dir = tideDirection(reading);
             const safeLimit = limits.safe;
-            const lead = safeLimit >= 0
-                ? 'Safe while the tide is under ' + fmtMetres(safeLimit) + ' m, caution up to ' +
-                  fmtMetres(limits.caution) + ' m, danger above.'
-                : (limits.caution >= 0
-                    ? 'Caution while the tide is under ' + fmtMetres(limits.caution) +
-                      ' m, danger above. This boat never gets ' + fmtMetres(SAFE_SPARE_M) +
-                      ' m above its required height under this span.'
-                    : 'This boat does not fit under the ' + escapeHtml(selectedSpanName) +
-                      ' span at any tide.');
+            let lead;
+            if (limits.caution < 0) {
+                lead = 'This boat does not fit under the ' + escapeHtml(selectedSpanName) +
+                    ' span at any tide.';
+            } else if (safeLimit < 0) {
+                lead = 'Caution while the tide is under ' + fmtMetres(limits.caution) +
+                    ' m, danger above. This boat never gets ' + fmtMetres(safeCushion()) +
+                    ' m of clearance under this span.';
+            } else if (!cautionPossible()) {
+                lead = 'Safe while the tide is under ' + fmtMetres(safeLimit) + ' m, danger above.';
+            } else {
+                lead = 'Safe while the tide is under ' + fmtMetres(safeLimit) + ' m, caution up to ' +
+                    fmtMetres(limits.caution) + ' m, danger above.';
+            }
             return '<div class="limits">' + lead + ' Now ' + fmtMetres(reading.height) + ' m' +
                 (dir ? ' and ' + dir : '') + '.</div>';
         }
@@ -2728,10 +2766,12 @@
 
             const legend =
                 '<div class="legend">' +
-                    '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) +
-                        ' m over required</span>' +
-                    '<span><span class="dot caution"></span>Caution</span>' +
-                    '<span><span class="dot danger"></span>Danger</span>' +
+                    '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(safeCushion()) +
+                        ' m clear of your boat</span>' +
+                    (cautionPossible()
+                        ? '<span><span class="dot caution"></span>Caution &mdash; fits, less clear</span>'
+                        : '') +
+                    '<span><span class="dot danger"></span>Danger &mdash; does not fit</span>' +
                 '</div>';
 
             if (required() === null) {
@@ -2786,12 +2826,21 @@
             const closesAt = win.end.time;
             const isNow = now >= win.start.time && now <= closesAt;
 
+            // With no caution shoulders the safe range is the window, so repeating the
+            // same two times says nothing; the duration is worth more.
+            const fullySafe = win.hasSafeCore &&
+                win.safeStart.time.getTime() === win.start.time.getTime() &&
+                win.safeEnd.time.getTime() === win.end.time.getTime();
+
             let note;
             if (!win.hasSafeCore) {
                 note = 'caution throughout';
             } else if (isNow) {
-                note = 'now · safe to ' +
-                    fmtTimeWithDay(win.safeEnd.time, win.start.time);
+                note = fullySafe
+                    ? 'now · open to ' + fmtTimeWithDay(win.end.time, win.start.time)
+                    : 'now · safe to ' + fmtTimeWithDay(win.safeEnd.time, win.start.time);
+            } else if (fullySafe) {
+                note = fmtDuration(windowMinutes(win) * 60000);
             } else {
                 note = 'safe ' + fmtTime(win.safeStart.time) + '–' +
                     fmtTimeWithDay(win.safeEnd.time, win.start.time);
@@ -2821,14 +2870,19 @@
                 ? windows.map(win => renderDetailWindow(day, win)).join('')
                 : '<span class="detail-safe">No passage on this day.</span>';
 
+            // Windows first: opening a day should expand on the summary line that was
+            // just tapped, not lead with a chart. The curve and the day's highs and
+            // lows sit underneath as context for those windows.
             return '<div class="day-detail">' +
                 (withHeading
                     ? '<div class="day-detail-head"><span>' +
                       escapeHtml(fmtDayShort(day.date)) + '</span></div>'
                     : '') +
-                renderDayCurve(day) +
-                '<div class="extremes">' + extremes + '</div>' +
                 body +
+                '<div class="day-chart">' +
+                    renderDayCurve(day) +
+                    '<div class="extremes">' + extremes + '</div>' +
+                '</div>' +
                 '<div class="detail-actions">' +
                     '<button type="button" data-check="' + fmtDateValue(day.date) + '">Check a time on this day</button>' +
                 '</div>' +
@@ -2845,12 +2899,18 @@
                     '<span class="spare num">' + fmtMetres(point.spareClearance) + ' m spare</span>' +
                 '</div>';
 
-            const safeLine = win.hasSafeCore
-                ? 'Safe ' + fmtTime(win.safeStart.time) + ' – ' +
-                  fmtTimeWithDay(win.safeEnd.time, win.start.time) +
-                  ' · caution either side of that'
-                : 'Caution throughout: this window never gets ' + fmtMetres(SAFE_SPARE_M) +
-                  ' m above your required height.';
+            const fullySafe = win.hasSafeCore &&
+                win.safeStart.time.getTime() === win.start.time.getTime() &&
+                win.safeEnd.time.getTime() === win.end.time.getTime();
+
+            const safeLine = !win.hasSafeCore
+                ? 'Caution throughout: this window never gets ' + fmtMetres(SAFE_CUSHION_M) +
+                  ' m of clearance above your boat.'
+                : fullySafe
+                    ? 'Safe throughout, on your ' + fmtMetres(ui.margin) + ' m margin.'
+                    : 'Safe ' + fmtTime(win.safeStart.time) + ' – ' +
+                      fmtTimeWithDay(win.safeEnd.time, win.start.time) +
+                      ' · caution either side of that';
 
             return '<div class="detail-window">' +
                 '<div class="detail-window-head">' +
@@ -2945,11 +3005,11 @@
                 const rows = [];
                 if (limits.caution > lo && limits.caution < hi) {
                     rows.push('<span><i></i>Above <b>' + fmtMetres(limits.caution) +
-                        ' m</b> of tide you do not fit at all</span>');
+                        ' m</b> you do not fit at all</span>');
                 }
                 if (limits.safe > lo && limits.safe < hi) {
                     rows.push('<span><i class="safe"></i>Below <b>' + fmtMetres(limits.safe) +
-                        ' m</b> you are ' + fmtMetres(SAFE_SPARE_M) + ' m over required</span>');
+                        ' m</b> you are ' + fmtMetres(safeCushion()) + ' m clear</span>');
                 }
                 if (rows.length) key = '<div class="curve-key">' + rows.join('') + '</div>';
             }
@@ -3003,10 +3063,13 @@
             }
 
             $('legendWide').innerHTML =
-                '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(SAFE_SPARE_M) +
-                    ' m or more over your required height</span>' +
-                '<span><span class="dot caution"></span>Caution &mdash; fits, with less than ' +
-                    fmtMetres(SAFE_SPARE_M) + ' m over</span>' +
+                '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(safeCushion()) +
+                    ' m or more of clearance above your boat</span>' +
+                (cautionPossible()
+                    ? '<span><span class="dot caution"></span>Caution &mdash; fits your ' +
+                      fmtMetres(ui.margin) + ' m margin, but under ' + fmtMetres(SAFE_CUSHION_M) +
+                      ' m clear</span>'
+                    : '') +
                 '<span><span class="dot danger"></span>Danger &mdash; does not fit</span>';
 
             document.querySelectorAll('.ranges button[data-range]').forEach(btn => {
@@ -3043,7 +3106,7 @@
                 ? 'Safe while the tide is under <b class="t-safe">' + fmtMetres(limits.safe) +
                   ' m</b>, caution up to <b class="t-caution">' + fmtMetres(limits.caution) +
                   ' m</b>, danger above.' + nowPart
-                : 'This boat never gets ' + fmtMetres(SAFE_SPARE_M) + ' m over required under the ' +
+                : 'This boat never gets ' + fmtMetres(safeCushion()) + ' m of clearance under the ' +
                   escapeHtml(selectedSpanName) + ' span. It fits at all only while the tide is under <b class="t-caution">' +
                   fmtMetres(limits.caution) + ' m</b>.' + nowPart;
         }

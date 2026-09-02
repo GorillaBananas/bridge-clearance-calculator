@@ -10,9 +10,9 @@ A beautiful, validated web application for calculating safe passage times under 
   moment at a time
 - **No submit button**: the answer, the day rows and the week grid redraw as you
   change the date, time, span, margin or boat height
-- **Safe, caution and danger**: a window is safe where at least 0.5m of spare
-  remains, caution where the boat fits with less, and is never drawn across a
-  period the boat does not fit
+- **Safe, caution and danger**: a window is safe once clearance above the boat
+  reaches whichever is greater, your margin or 0.5m - the two never stack - and a
+  window is never drawn across a period the boat does not fit
 - **Mobile first**: one layout at two widths; the setup panel becomes a left rail
   and the day list becomes a week grid on a clock at 1000px and up
 - **Validated calculations**: checked against every value of the OBC published chart

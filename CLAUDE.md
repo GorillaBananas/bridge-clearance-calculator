@@ -96,9 +96,32 @@ impassable sample: before v10 the joiner glued runs up to 1.5 hours apart, so a
 short closure around a weak high tide was reported as continuous passage. That
 was safety-relevant and is covered by "Fix 7" in `node_extract_tests.js`.
 
-Each window carries `safeStart`/`safeEnd` (the stretch holding at least
-`SAFE_SPARE_M`, or null), `hasSafeCore`, `best` (the lowest tide in the window)
-and `minClearance`/`maxClearance`.
+Each window carries `safeStart`/`safeEnd` (the stretch clearing the safe floor,
+or null), `hasSafeCore`, `best` (the lowest tide in the window) and
+`minClearance`/`maxClearance`.
+
+### What "safe" means (v10.0)
+`SAFE_CUSHION_M` (0.5) is a **floor on total clearance above the bare boat, not
+an addition to the skipper's margin**. A moment is safe once clearance reaches
+`max(margin, SAFE_CUSHION_M)`; `safeSpareThreshold(margin)` returns the spare
+still needed, `max(0, SAFE_CUSHION_M - margin)`.
+
+| Margin | Fits at all | Safe from | Caution band |
+|--------|-------------|-----------|--------------|
+| 0.00 | boat | boat + 0.50 | 0.50 wide |
+| 0.30 | boat + 0.30 | boat + 0.50 | 0.20 wide |
+| 0.50 | boat + 0.50 | boat + 0.50 | none |
+| 1.00 | boat + 1.00 | boat + 1.00 | none |
+
+Before this the two stacked: a 0.30m margin was only called safe at 0.80m of
+clearance, which double-counted the skipper's own decision. The safe boundary
+must not move with the margin while the margin is under the floor - "the safe
+boundary is the same clearance whatever the margin below the floor" in
+`node_extract_tests.js` pins exactly that.
+
+At or above the floor there is no caution band at all, so the UI drops the amber
+entry from the legends (`cautionPossible()`) and a window with no caution
+shoulders reports its duration rather than repeating its own times.
 
 Windows are reported from the first to the **last** moment the data shows the boat
 fits, never to the sample after it. The true edges lie within the ten minutes
@@ -404,3 +427,5 @@ Where the build departs from that spec, and why:
 | Light BETA tag, no interpolation caveat | Full caveats section, linked from the tag | It is a safety tool; the v9.3 warnings were restored rather than dropped |
 | Derived limits in the desktop rail only | Rail on desktop, under the result on mobile | Same sentence, rendered by `renderRailLimits` and `renderLimitsLine` |
 | "Over 1 hour only" toggle | Cut | Removed at the owner's request: it hid windows rather than ranking them, and a short window is exactly the one a skipper needs to see |
+| Safe = 0.5m spare on top of the margin | Safe = max(margin, 0.5m) of clearance | The two stacked, so a considered margin was double-counted; see "What safe means" |
+| Day panel led with the tide curve | Windows first, curve below | Opening a day should expand on the summary row just tapped, not lead with a chart |
