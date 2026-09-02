@@ -545,6 +545,8 @@
         .moment .when { font-size: 11.5px; font-weight: 600; color: var(--muted-45); white-space: nowrap; }
         .moment.peak .when { color: var(--safe-deep); }
         .moment .gap { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+        .moment .qual { font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--muted); }
+        .moment.peak .qual { color: var(--safe-deep); }
         .moment .spare { font-size: 12px; color: var(--muted); }
         .moment.peak .spare { color: var(--safe-deep); }
 
@@ -2845,7 +2847,8 @@
             const moment = (label, point, isPeak) =>
                 '<div class="moment' + (isPeak ? ' peak' : '') + '">' +
                     '<span class="when">' + label + ' ' + fmtTime(point.time) + '</span>' +
-                    '<span class="gap num">' + fmtMetres(point.actualClearance) + ' m</span>' +
+                    '<span class="gap num">' + fmtMetres(point.actualClearance) +
+                        ' m<span class="qual"> gap</span></span>' +
                     '<span class="spare num">' + fmtMetres(point.spareClearance) + ' m spare</span>' +
                 '</div>';
 
