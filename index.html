@@ -415,19 +415,6 @@
         }
         .days-head .label { font-size: 13px; }
 
-        .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-        .toggle-track {
-            width: 44px; height: 26px;
-            border-radius: 13px;
-            background: var(--track);
-            display: flex; align-items: center;
-            padding: 0 3px;
-            transition: background 0.15s;
-        }
-        .toggle-knob { width: 20px; height: 20px; border-radius: 10px; background: var(--card); transition: transform 0.15s; }
-        .toggle[aria-pressed="true"] .toggle-track { background: var(--navy); }
-        .toggle[aria-pressed="true"] .toggle-knob { transform: translateX(18px); background: var(--paper); }
-
         .days { margin: 14px 10px 0; display: flex; flex-direction: column; gap: 4px; }
 
         .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 14px 10px; font-size: 12px; color: var(--muted); }
@@ -1057,10 +1044,6 @@
 
         <div class="days-head">
             <span class="label" id="daysHeading">Next 7 days</span>
-            <button type="button" class="toggle" id="longOnly" aria-pressed="false">
-                <span>Over 1 hour only</span>
-                <span class="toggle-track"><span class="toggle-knob"></span></span>
-            </button>
         </div>
 
         <section class="days" id="days" aria-labelledby="daysHeading"></section>
@@ -2348,7 +2331,6 @@
         const MAX_HOLD_MS = 6000;
         const MARGIN_PRESETS = [0, 0.30, 0.50, 1.00];
         const BOAT_DEFAULT = 3.50;
-        const LONG_WINDOW_MINUTES = 60;
         const WEEK_DAYS = 7;
         const FORTNIGHT_DAYS = 14;
 
@@ -2358,7 +2340,6 @@
             time: { h: 12, m: 0 },
             margin: 0.50,
             boat: null,          // null until the skipper enters one
-            longOnly: false,
             dayCount: WEEK_DAYS,
             forecast: [],
             forecastAll: [],
@@ -2500,10 +2481,7 @@
         }
 
         function windowsToShow(day) {
-            if (!day || day.unavailable) return [];
-            return ui.longOnly
-                ? day.windows.filter(w => windowMinutes(w) >= LONG_WINDOW_MINUTES)
-                : day.windows;
+            return (!day || day.unavailable) ? [] : day.windows;
         }
 
         function windowStatus(win) {
@@ -2754,8 +2732,7 @@
                 if (day.unavailable) {
                     body = '<div class="day-empty">No published predictions</div>';
                 } else if (shown.length === 0) {
-                    body = '<div class="day-empty">' +
-                        (day.windows.length ? 'No window over an hour' : 'No passage this day') + '</div>';
+                    body = '<div class="day-empty">No passage this day</div>';
                 } else {
                     body = '<div class="day-windows">' + shown.map(win => renderWindowLine(day, win)).join('') + '</div>';
                 }
@@ -2824,9 +2801,7 @@
             const windows = windowsToShow(day);
             const body = windows.length
                 ? windows.map(win => renderDetailWindow(day, win)).join('')
-                : '<span class="detail-safe">' +
-                  (day.windows.length ? 'No window over an hour on this day.' : 'No passage on this day.') +
-                  '</span>';
+                : '<span class="detail-safe">No passage on this day.</span>';
 
             return '<div class="day-detail">' +
                 (withHeading
@@ -3116,8 +3091,7 @@
                 if (day.unavailable) {
                     bands = '<span class="week-empty">No published predictions</span>';
                 } else if (own.length === 0 && !lapWin) {
-                    bands = '<span class="week-empty">' +
-                        (day.windows.length ? 'No window over an hour' : 'No passage this day') + '</span>';
+                    bands = '<span class="week-empty">No passage this day</span>';
                 } else {
                     if (lapWin) bands += drawWindow(lapWin, true);
                     for (const win of own) bands += drawWindow(win, false);
@@ -3166,7 +3140,6 @@
             Array.from($('spanGroup').children).forEach(btn => {
                 btn.setAttribute('aria-pressed', String(btn.dataset.span === selectedSpanId));
             });
-            $('longOnly').setAttribute('aria-pressed', String(ui.longOnly));
         }
 
         function renderAll() {
@@ -3472,12 +3445,6 @@
 
             document.querySelectorAll('button[data-step]').forEach(btn => {
                 bindRepeat(btn, () => stepValue(btn.dataset.step, Number(btn.dataset.delta)));
-            });
-
-            $('longOnly').addEventListener('click', () => {
-                ui.longOnly = !ui.longOnly;
-                renderDays();
-                renderControls();
             });
 
             $('days').addEventListener('click', e => {

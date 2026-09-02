@@ -403,4 +403,4 @@ Where the build departs from that spec, and why:
 | Archivo / Archivo Narrow from Google Fonts | System stack | The page otherwise has no external assets |
 | Light BETA tag, no interpolation caveat | Full caveats section, linked from the tag | It is a safety tool; the v9.3 warnings were restored rather than dropped |
 | Derived limits in the desktop rail only | Rail on desktop, under the result on mobile | Same sentence, rendered by `renderRailLimits` and `renderLimitsLine` |
-| "Over 1 hour only" toggle in the desktop rail | Left above the week grid | It filters what is directly below it |
+| "Over 1 hour only" toggle | Cut | Removed at the owner's request: it hid windows rather than ranking them, and a short window is exactly the one a skipper needs to see |
