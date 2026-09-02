@@ -495,8 +495,7 @@
         .curve-key i.safe { border-top-color: var(--caution-line); }
         .curve-key b { font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-        /* The chart and the day's extremes read as one block of context under the
-           windows, separated from them by a single rule. */
+        /* The curve sits under the windows as context, separated by a single rule. */
         .day-chart {
             display: flex;
             flex-direction: column;
@@ -505,14 +504,28 @@
             border-top: 1px solid var(--app-bg);
         }
 
-        .extremes {
+        .tide-table {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px 18px;
-            font-size: 12.5px;
-            color: var(--muted-45);
+            flex-direction: column;
+            padding-top: 18px;
+            border-top: 1px solid var(--app-bg);
         }
-        .extremes b { color: var(--navy); font-weight: 700; }
+        .tide-table .label { margin-bottom: 8px; }
+
+        .tide-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--app-bg);
+            font-size: 14px;
+        }
+        .tide-row:last-child { border-bottom: 0; }
+        .tide-row .when { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+        .tide-row .when .num { font-weight: 700; }
+        .tide-row .kind { font-size: 12.5px; color: var(--muted); }
+        .tide-row .height { flex: 0 0 auto; font-weight: 700; }
 
         .detail-window { display: flex; flex-direction: column; gap: 12px; }
         .detail-window + .detail-window { padding-top: 20px; border-top: 1px solid var(--app-bg); }
@@ -2861,9 +2874,15 @@
                 return '<div class="day-detail"><span class="detail-safe">No published predictions for this day.</span></div>';
             }
 
-            const extremes = day.points.map(p =>
-                '<span>' + (p.kind === 'high' ? 'High' : 'Low') + ' ' + fmtTime(p.time) +
-                ' · <b>' + fmtMetres(p.height) + ' m</b></span>').join('');
+            // The four (sometimes three or five) points LINZ publishes for the day,
+            // one per row: time on the left, height on the right, so the column of
+            // heights can be read straight down.
+            const tideRows = day.points.map(p =>
+                '<div class="tide-row">' +
+                    '<span class="when"><span class="num">' + fmtTime(p.time) + '</span>' +
+                    '<span class="kind">' + (p.kind === 'high' ? 'High' : 'Low') + '</span></span>' +
+                    '<span class="height num">' + fmtMetres(p.height) + ' m</span>' +
+                '</div>').join('');
 
             const windows = windowsToShow(day);
             const body = windows.length
@@ -2879,9 +2898,10 @@
                       escapeHtml(fmtDayShort(day.date)) + '</span></div>'
                     : '') +
                 body +
-                '<div class="day-chart">' +
-                    renderDayCurve(day) +
-                    '<div class="extremes">' + extremes + '</div>' +
+                '<div class="day-chart">' + renderDayCurve(day) + '</div>' +
+                '<div class="tide-table">' +
+                    '<span class="label">LINZ tide data for selected date</span>' +
+                    tideRows +
                 '</div>' +
                 '<div class="detail-actions">' +
                     '<button type="button" data-check="' + fmtDateValue(day.date) + '">Check a time on this day</button>' +

@@ -291,6 +291,7 @@ Search by identifier - line numbers move.
 | Verdict panel (incl. shortfall) | `renderResult`, `renderShortfallTail` |
 | Day rows | `renderDays`, `renderWindowLine` |
 | Expanded day | `renderDayDetail`, `renderDayCurve` |
+| Published tide points table | `tide-row`, `classifyTidePoints` |
 | Wide layout only | `renderWide`, `renderWeek`, `renderRailLimits`, `renderDayCard` |
 | Caveats section | `id="caveats"` |
 | Analytics | `data-goatcounter` |
