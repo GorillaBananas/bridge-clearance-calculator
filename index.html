@@ -88,6 +88,10 @@
             --on-navy-84: #B8CFDB;
 
             --tap: 46px;
+
+            /* Curve fills: the band colours, lightened so the tide line reads over them */
+            --curve-caution: #FDEBC4;
+            --curve-safe: #C6EFD5;
         }
 
         @supports (color: oklch(0.8 0.16 155)) {
@@ -116,6 +120,8 @@
                 --on-navy-76: oklch(0.76 0.03 232);
                 --on-navy-80: oklch(0.80 0.02 232);
                 --on-navy-84: oklch(0.84 0.03 232);
+                --curve-caution: oklch(0.95 0.04 85);
+                --curve-safe: oklch(0.93 0.07 155);
             }
         }
 
@@ -439,6 +445,73 @@
         .day-empty { font-size: 13px; color: var(--muted); padding-top: 2px; }
 
         .days-more { padding: 11px 14px; font-size: 14px; font-weight: 600; color: var(--link); text-align: left; }
+
+        .day-block { display: flex; flex-direction: column; }
+        .day-block.open { background: var(--card); border-radius: 16px; border: 1px solid var(--border); }
+        .day-block.open > .day { border-color: transparent; background: transparent; }
+
+        .day-detail {
+            padding: 0 14px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .day-detail-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .day-detail-head .close { font-size: 13px; font-weight: 600; color: var(--link); }
+
+        .curve { width: 100%; height: auto; display: block; }
+
+        .extremes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 16px;
+            font-size: 12.5px;
+            color: var(--muted-45);
+        }
+        .extremes b { color: var(--navy); font-weight: 700; }
+
+        .detail-window { display: flex; flex-direction: column; gap: 8px; }
+        .detail-window + .detail-window { padding-top: 12px; border-top: 1px solid var(--border); }
+        .detail-window-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+        .detail-window-head .times { font-size: 17px; font-weight: 700; }
+        .detail-window-head .dur { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+
+        .moments { display: flex; gap: 6px; }
+        .moment {
+            flex: 1;
+            min-width: 0;
+            padding: 10px;
+            border-radius: 12px;
+            background: var(--app-bg);
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        .moment.best { background: var(--safe-soft); }
+        .moment .when { font-size: 12px; font-weight: 600; color: var(--muted-45); }
+        .moment.best .when { color: var(--safe-deep); }
+        .moment .gap { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+        .moment .spare { font-size: 12px; color: var(--muted); }
+        .moment.best .spare { color: var(--safe-deep); }
+
+        .detail-safe { font-size: 12.5px; color: var(--muted-45); }
+        .detail-actions { display: flex; gap: 8px; }
+        .detail-actions button {
+            flex: 1;
+            height: var(--tap);
+            border-radius: 12px;
+            background: var(--navy);
+            color: var(--paper);
+            font-size: 14px;
+            font-weight: 600;
+        }
 
         .best {
             margin: 14px 14px 0;
@@ -1929,7 +2002,7 @@
             forecast: [],
             forecastAll: [],
             selectedDay: null,
-            expandedDay: null,
+            expandedDate: null,
             fetchedAt: null,
             source: null,
             stale: false,
@@ -2057,10 +2130,12 @@
             return reading.afterHeight > reading.beforeHeight ? 'rising' : 'falling';
         }
 
+        // Samples are 10 minutes apart, so a window is reported from the first to
+        // the last moment we can assert the boat fits. The true edges lie somewhere
+        // in the ten minutes either side; reporting the inner bound is the
+        // conservative direction, and the only one the data supports.
         function windowMinutes(win) {
-            // Samples are 10 minutes apart and mark passable moments, so the window
-            // runs to the end of its last passable sample.
-            return (win.end.time - win.start.time) / 60000 + 10;
+            return (win.end.time - win.start.time) / 60000;
         }
 
         function windowsToShow(day) {
@@ -2169,8 +2244,8 @@
             if (status === 'danger') {
                 tail = renderShortfallTail(when, limits);
             } else {
-                const closesAt = win ? new Date(win.end.time.getTime() + 10 * 60000) : null;
-                const safeUntil = win && win.safeEnd ? new Date(win.safeEnd.time.getTime() + 10 * 60000) : null;
+                const closesAt = win ? win.end.time : null;
+                const safeUntil = win && win.safeEnd ? win.safeEnd.time : null;
                 const parts = [];
                 if (safeUntil) parts.push('safe until ' + fmtTimeWithDay(safeUntil, when));
                 if (closesAt) parts.push('closed from ' + fmtTimeWithDay(closesAt, when));
@@ -2286,7 +2361,9 @@
             }
 
             const rows = ui.forecast.map(day => {
+                const key = fmtDateValue(day.date);
                 const isToday = dayDelta(day.date, ui.today) === 0;
+                const isOpen = ui.expandedDate === key;
                 const shown = windowsToShow(day);
                 let body;
 
@@ -2299,10 +2376,14 @@
                     body = '<div class="day-windows">' + shown.map(win => renderWindowLine(day, win)).join('') + '</div>';
                 }
 
-                return '<button type="button" class="day' + (isToday ? ' today' : '') +
-                    '" data-date="' + fmtDateValue(day.date) + '">' +
-                    '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' +
-                    body + '</button>';
+                return '<div class="day-block' + (isOpen ? ' open' : '') + '">' +
+                    '<button type="button" class="day' + (isToday && !isOpen ? ' today' : '') +
+                        '" data-date="' + key + '" aria-expanded="' + isOpen + '">' +
+                        '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' +
+                        body +
+                    '</button>' +
+                    (isOpen ? renderDayDetail(day) : '') +
+                '</div>';
             }).join('');
 
             const more = ui.dayCount === WEEK_DAYS
@@ -2315,7 +2396,7 @@
         function renderWindowLine(day, win) {
             const now = new Date();
             const status = windowStatus(win);
-            const closesAt = new Date(win.end.time.getTime() + 10 * 60000);
+            const closesAt = win.end.time;
             const isNow = now >= win.start.time && now <= closesAt;
 
             let note;
@@ -2323,10 +2404,10 @@
                 note = 'caution throughout';
             } else if (isNow) {
                 note = 'now · safe to ' +
-                    fmtTimeWithDay(new Date(win.safeEnd.time.getTime() + 10 * 60000), win.start.time);
+                    fmtTimeWithDay(win.safeEnd.time, win.start.time);
             } else {
                 note = 'safe ' + fmtTime(win.safeStart.time) + '–' +
-                    fmtTimeWithDay(new Date(win.safeEnd.time.getTime() + 10 * 60000), win.start.time);
+                    fmtTimeWithDay(win.safeEnd.time, win.start.time);
             }
 
             return '<span class="win">' +
@@ -2335,6 +2416,148 @@
                     fmtTimeWithDay(closesAt, win.start.time) + '</span>' +
                 '<span class="win-note">' + note + '</span>' +
             '</span>';
+        }
+
+        // The expanded day: the tide curve with both limits drawn on it, the day's
+        // highs and lows, and what each window opens, peaks and closes at.
+        function renderDayDetail(day) {
+            if (day.unavailable) {
+                return '<div class="day-detail"><span class="detail-safe">No published predictions for this day.</span></div>';
+            }
+
+            const extremes = day.points.map(p =>
+                '<span>' + (p.kind === 'high' ? 'High' : 'Low') + ' ' + fmtTime(p.time) +
+                ' · <b>' + fmtMetres(p.height) + ' m</b></span>').join('');
+
+            const windows = windowsToShow(day);
+            const body = windows.length
+                ? windows.map(win => renderDetailWindow(day, win)).join('')
+                : '<span class="detail-safe">' +
+                  (day.windows.length ? 'No window over an hour on this day.' : 'No passage on this day.') +
+                  '</span>';
+
+            return '<div class="day-detail">' +
+                '<div class="day-detail-head">' +
+                    '<span>' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
+                    '<span class="close">Tap to close &#8963;</span>' +
+                '</div>' +
+                renderDayCurve(day) +
+                '<div class="extremes">' + extremes + '</div>' +
+                body +
+                '<div class="detail-actions">' +
+                    '<button type="button" data-check="' + fmtDateValue(day.date) + '">Check a time on this day</button>' +
+                '</div>' +
+            '</div>';
+        }
+
+        function renderDetailWindow(day, win) {
+            const closesAt = win.end.time;
+            const moment = (label, point, isBest) =>
+                '<div class="moment' + (isBest ? ' best' : '') + '">' +
+                    '<span class="when">' + label + ' ' + fmtTime(point.time) + '</span>' +
+                    '<span class="gap num">' + fmtMetres(point.actualClearance) + ' m</span>' +
+                    '<span class="spare num">' + fmtMetres(point.spareClearance) + ' m spare</span>' +
+                '</div>';
+
+            const safeLine = win.hasSafeCore
+                ? 'Safe ' + fmtTime(win.safeStart.time) + ' – ' +
+                  fmtTimeWithDay(win.safeEnd.time, win.start.time) +
+                  ' · caution either side of that'
+                : 'Caution throughout: this window never reaches ' + fmtMetres(SAFE_SPARE_M) + ' m of spare.';
+
+            return '<div class="detail-window">' +
+                '<div class="detail-window-head">' +
+                    '<span class="dot ' + windowStatus(win) + '"></span>' +
+                    '<span class="times num">' + fmtTime(win.start.time) + ' – ' +
+                        fmtTimeWithDay(closesAt, win.start.time) + '</span>' +
+                    '<span class="dur">' + fmtDuration(windowMinutes(win) * 60000) + '</span>' +
+                '</div>' +
+                '<div class="moments">' +
+                    moment('Opens', win.start, false) +
+                    moment('Best', win.best, true) +
+                    moment('Closes', win.end, false) +
+                '</div>' +
+                '<span class="detail-safe">' + safeLine + '</span>' +
+            '</div>';
+        }
+
+        // The day's tide curve, with the passable bands shaded behind it and both
+        // derived limits drawn as dashed lines, so the shape of the day is legible
+        // without reading any of the numbers.
+        function renderDayCurve(day) {
+            const W = 330, H = 106, LABELS = 22;
+            const series = day.series;
+            if (series.length < 2) return '';
+
+            const limits = tideLimits();
+            const heights = series.map(s => s.height);
+            let lo = Math.min.apply(null, heights);
+            let hi = Math.max.apply(null, heights);
+
+            // Bring a limit into view only if it is anywhere near the day's water.
+            if (limits) {
+                [limits.caution, limits.safe].forEach(v => {
+                    if (v > lo - 1 && v < hi + 1) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+                });
+            }
+            const pad = Math.max(0.15, (hi - lo) * 0.12);
+            lo -= pad; hi += pad;
+
+            const dayStart = startOfDay(day.date).getTime();
+            const x = t => ((t - dayStart) / 86400000) * W;
+            const y = h => H - ((h - lo) / (hi - lo)) * H;
+
+            const band = (from, to, fill) => {
+                const x1 = Math.max(0, x(from.getTime()));
+                const x2 = Math.min(W, x(to.getTime()));
+                if (x2 <= x1) return '';
+                return '<rect x="' + x1.toFixed(1) + '" y="0" width="' + (x2 - x1).toFixed(1) +
+                    '" height="' + H + '" fill="' + fill + '"></rect>';
+            };
+
+            let bands = '';
+            for (const win of day.windows) {
+                const closes = new Date(win.end.time.getTime() + 10 * 60000);
+                bands += band(win.start.time, closes, 'var(--curve-caution)');
+                if (win.safeStart) {
+                    bands += band(win.safeStart.time, new Date(win.safeEnd.time.getTime() + 10 * 60000),
+                        'var(--curve-safe)');
+                }
+            }
+
+            let limitLines = '';
+            if (limits) {
+                [[limits.caution, 'var(--danger-line)'], [limits.safe, 'var(--caution-line)']].forEach(([v, stroke]) => {
+                    if (v <= lo || v >= hi) return;
+                    limitLines += '<line x1="0" y1="' + y(v).toFixed(1) + '" x2="' + W + '" y2="' + y(v).toFixed(1) +
+                        '" stroke="' + stroke + '" stroke-width="1.4" stroke-dasharray="5 4"></line>';
+                });
+            }
+
+            const points = series.map(s => x(s.time.getTime()).toFixed(1) + ',' + y(s.height).toFixed(1)).join(' ');
+
+            let nowLine = '';
+            const now = new Date();
+            if (dayDelta(now, day.date) === 0) {
+                const nx = x(now.getTime()).toFixed(1);
+                nowLine = '<line x1="' + nx + '" y1="0" x2="' + nx + '" y2="' + H +
+                    '" stroke="var(--navy)" stroke-width="2"></line>';
+            }
+
+            const hours = [0, 6, 12, 18, 24].map(h => {
+                const px = (h / 24) * W;
+                const anchor = h === 0 ? 'start' : h === 24 ? 'end' : 'middle';
+                return '<text x="' + px.toFixed(1) + '" y="' + (H + 16) + '" font-size="10" text-anchor="' +
+                    anchor + '" fill="var(--muted-55)">' + pad2(h) + '</text>';
+            }).join('');
+
+            return '<svg class="curve" viewBox="0 0 ' + W + ' ' + (H + LABELS) +
+                '" role="img" aria-label="Tide curve for ' + escapeHtml(fmtDayShort(day.date)) + '">' +
+                bands + limitLines +
+                '<polyline points="' + points + '" fill="none" stroke="var(--navy)" stroke-width="2.2" ' +
+                    'stroke-linejoin="round" stroke-linecap="round"></polyline>' +
+                nowLine + hours +
+            '</svg>';
         }
 
         function renderBest() {
@@ -2355,7 +2578,7 @@
             el.innerHTML =
                 '<span class="headline">' + escapeHtml(fmtDayTiny(best.day.date)) + ' · ' +
                     fmtTime(best.win.start.time) + ' – ' +
-                    fmtTimeWithDay(new Date(best.win.end.time.getTime() + 10 * 60000), best.win.start.time) + '</span>' +
+                    fmtTimeWithDay(best.win.end.time, best.win.start.time) + '</span>' +
                 '<span class="sub">Longest window in the next ' + ui.dayCount + ' days, ' +
                     fmtDuration(best.mins * 60000) + '</span>';
         }
@@ -2607,11 +2830,21 @@
                     recompute(false);
                     return;
                 }
+
+                // "Check a time" loads that date into the picker at the top.
+                const check = e.target.closest('button[data-check]');
+                if (check) {
+                    const [cy, cm, cd] = check.dataset.check.split('-').map(Number);
+                    setDate(new Date(cy, cm - 1, cd));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+
+                // Tapping a day expands it in place; the list stays around it.
                 const row = e.target.closest('.day[data-date]');
                 if (!row) return;
-                const [y, m, d] = row.dataset.date.split('-').map(Number);
-                setDate(new Date(y, m - 1, d));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                ui.expandedDate = ui.expandedDate === row.dataset.date ? null : row.dataset.date;
+                renderDays();
             });
 
             $('refreshBtn').addEventListener('click', () => recompute(true));
