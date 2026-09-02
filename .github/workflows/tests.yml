@@ -81,5 +81,20 @@ jobs:
                 echo "ok: $asset"
               done
 
+      - name: Relative assets the page loads exist in the repo
+        # The page ships the OBC logo as a same-origin file. A missing one is a
+        # broken image on the live site with nothing else to catch it.
+        run: |
+          grep -o 'src="[^"]*"' index.html \
+            | sed 's|src="||; s|"$||' \
+            | grep -v '^https\?://' | grep -v '^//' | grep -v '^data:' | sort -u \
+            | while read -r asset; do
+                if [ ! -f "$asset" ]; then
+                  echo "index.html loads $asset, which is not in the repo" >&2
+                  exit 1
+                fi
+                echo "ok: $asset"
+              done
+
       - name: Shell scripts parse
         run: bash -n fetch_tides.sh deploy.sh

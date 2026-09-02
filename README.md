@@ -6,11 +6,16 @@ A beautiful, validated web application for calculating safe passage times under 
 
 - **Official LINZ tide data**, bundled with the site so it loads without a CORS proxy
 - **Dual bridge spans**: IN/OUT (6.2m) and HIGH (6.5m) clearance options
-- **Smart calculations**: Accounts for boat height, safety margins, and tide heights
-- **Safe passage windows**: Shows all safe times throughout the day with detailed clearance information
-- **Beautiful UI**: Ocean-themed gradient design with glass morphism effects
-- **Mobile-first**: Fully responsive design optimized for both desktop and mobile
-- **Validated calculations**: Comprehensive test suite ensures accuracy
+- **Planning first**: passage windows for the next seven or fourteen days, not one
+  moment at a time
+- **No submit button**: the answer, the day rows and the week grid redraw as you
+  change the date, time, span, margin or boat height
+- **Safe, caution and danger**: a window is safe where at least 0.5m of spare
+  remains, caution where the boat fits with less, and is never drawn across a
+  period the boat does not fit
+- **Mobile first**: one layout at two widths; the setup panel becomes a left rail
+  and the day list becomes a week grid on a clock at 1000px and up
+- **Validated calculations**: checked against every value of the OBC published chart
 
 ## 🚤 How It Works
 
@@ -123,14 +128,17 @@ npx http-server
 
 ## 📱 Usage Instructions
 
-1. **Select Bridge Span**: Choose IN/OUT (6.2m) or HIGH (6.5m)
-2. **Enter Date**: Pick your travel date (2024-2028)
-3. **Enter Time** (optional): Your preferred departure time
-4. **Boat Details**: 
-   - Height from waterline to highest point
-   - Safety margin (recommended: 0.5m minimum)
-5. **Check Now**: See clearance for specific time
-6. **Find Times**: View all safe windows for the day
+1. **Boat height**: waterline to your highest point, unladen. Remembered on this
+   device, so it only has to be set once.
+2. **Safety margin**: how much clearance you want left above the boat. Steps of
+   0.05m; 0 is valid and shows the bare gap.
+3. **Bridge span**: IN/OUT (6.2m) or HIGH (6.5m).
+4. **Date and time**: the moment you want an answer for. "Now" jumps to the
+   current time; the arrows step a day.
+
+The verdict for that moment appears directly under the inputs, and the passage
+windows for the coming week appear below it. Tap a day to open its tide curve
+and see what each window opens, peaks and closes at. There is nothing to submit.
 
 ## ⚠️ Important Safety Notes
 
@@ -224,10 +232,14 @@ For issues or questions:
 
 - [ ] Add weather data integration
 - [ ] Include barometric pressure adjustments
-- [ ] Multi-day planning view
+- [x] Multi-day planning view
 - [ ] Export safe times to calendar
-- [ ] PWA support for offline use
 - [ ] Additional NZ bridge locations
+
+PWA support is deliberately not on this list. A manifest put the page into
+standalone mode on some devices and hid the address bar and navigation buttons,
+so there is no manifest and no service worker. That also rules out scheduled
+reminders, which have no other delivery mechanism on the web.
 
 ---
 

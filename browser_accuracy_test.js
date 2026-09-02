@@ -258,30 +258,28 @@
         console.log('calculateClearance function available');
     }
 
-    // Check current UI state
-    const dateInput = document.getElementById('date');
-    const timeInput = document.getElementById('time');
-    const boatHeightInput = document.getElementById('boat-height');
-    const safetyMarginInput = document.getElementById('safety-margin');
+    // Check current UI state. These ids are the ones the page actually uses;
+    // margin and boat height are read from their displayed values because both
+    // are steppers rather than typed fields.
+    const dateInput = document.getElementById('tideDate');
+    const timeInput = document.getElementById('preferredTime');
+    const boatReadout = document.getElementById('boatReadout');
+    const marginReadout = document.getElementById('marginReadout');
 
-    if (dateInput && timeInput && boatHeightInput && safetyMarginInput) {
+    if (dateInput && timeInput && boatReadout && marginReadout) {
         console.log('\nCurrent UI values:');
         console.log(`  Date: ${dateInput.value}`);
         console.log(`  Time: ${timeInput.value}`);
-        console.log(`  Boat Height: ${boatHeightInput.value}m`);
-        console.log(`  Safety Margin: ${safetyMarginInput.value}m`);
+        console.log(`  Boat height: ${boatReadout.textContent.trim()}`);
+        console.log(`  Safety margin: ${marginReadout.textContent.trim()}`);
 
-        // Get current results if displayed
-        const spareClearance = document.querySelector('.spare-clearance');
-        const tideHeight = document.querySelector('.tide-height');
-
-        if (spareClearance) {
-            console.log(`\nDisplayed Results:`);
-            console.log(`  Spare Clearance: ${spareClearance.textContent}`);
+        const result = document.getElementById('resultWrap');
+        if (result && result.innerText.trim()) {
+            console.log('\nDisplayed result:');
+            console.log('  ' + result.innerText.trim().replace(/\n/g, '\n  '));
         }
-        if (tideHeight) {
-            console.log(`  Tide Height: ${tideHeight.textContent}`);
-        }
+    } else {
+        console.log('\nUI elements not found - is this the current version of the page?');
     }
 
     // ================================================================
