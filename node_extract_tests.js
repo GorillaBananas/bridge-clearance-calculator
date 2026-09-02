@@ -55,6 +55,14 @@ function extractService() {
     return extractBlock(html, idx) + ';';
 }
 
+// Pull a single-line `const NAME = value;` straight out of the app, so the tests
+// cannot drift from the threshold the page actually uses.
+function extractConst(name) {
+    const match = new RegExp('\\n\\s*const ' + name + '\\s*=\\s*([^;]+);').exec(html);
+    assert.ok(match, 'could not find const ' + name + ' in index.html');
+    return 'const ' + name + ' = ' + match[1].trim() + ';';
+}
+
 const FUNCTIONS = [
     'getNZTimezoneOffset',
     'isLinzDataRow',
@@ -63,7 +71,8 @@ const FUNCTIONS = [
     'buildInterpolationPoints',
     'findBracketingPoints',
     'generateHourlyTideData',
-    'interpolateTideHeight'
+    'interpolateTideHeight',
+    'calculateSafeWindows'
 ];
 
 // ------------------------------------------------------------------ sandbox
@@ -91,9 +100,10 @@ const quietConsole = {
 
 // interpolateTideHeight reads these module-level globals in the app
 const source = 'let nextDayFirstPoint = null, prevDayLastPoint = null;\n' +
+    extractConst('SAFE_SPARE_M') + '\n' +
     FUNCTIONS.map(extractFunction).join('\n\n') + '\n\n' + extractService() +
     '\nfunction setAdjacent(prev, next) { prevDayLastPoint = prev; nextDayFirstPoint = next; }' +
-    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent };';
+    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent, SAFE_SPARE_M };';
 
 const api = new Function('localStorage', 'fetch', 'console', 'AbortController', source)(
     localStorageStub, fetchStub, quietConsole, AbortController
@@ -102,8 +112,10 @@ const api = new Function('localStorage', 'fetch', 'console', 'AbortController', 
 const {
     isLinzDataRow, parseLinzCsv, ruleOfTwelfthsHeight, buildInterpolationPoints,
     generateHourlyTideData, getNZTimezoneOffset, interpolateTideHeight,
-    TideDataService, setAdjacent
+    calculateSafeWindows, TideDataService, setAdjacent
 } = api;
+
+const SAFE_SPARE_M_LOCAL = api.SAFE_SPARE_M;
 
 // -------------------------------------------------------------------- runner
 
@@ -514,6 +526,84 @@ async function main() {
         }
         assert.ok(threw);
         assert.strictEqual(threw.type, TideDataService.ErrorTypes.YEAR_UNAVAILABLE);
+    });
+
+    console.log('\nFix 7 - passage windows break on any impassable sample');
+
+    // A 10-minute series built by hand, so the closure is exact rather than
+    // whatever the tide happens to do on a given day.
+    function series(heights) {
+        const base = new Date(2026, 8, 4, 0, 0, 0);
+        return heights.map((h, i) => ({
+            time: new Date(base.getTime() + i * 10 * 60 * 1000),
+            height: h
+        }));
+    }
+
+    // span 6.2, boat 3.9, margin 0.5 => required 4.40, so the boat fits while the
+    // tide is at or under 1.80m, and has 0.5m spare while it is at or under 1.30m.
+    const SPAN = 6.2, BOAT = 3.9, MARGIN = 0.5;
+
+    await test('a brief closure splits one window into two', () => {
+        //          fits ..............  closed ......  fits ..............
+        const data = series([1.7, 1.5, 1.2, 1.0, 1.2, 1.9, 2.0, 1.9, 1.2, 1.0, 1.4, 1.75]);
+        const windows = calculateSafeWindows(data, SPAN, BOAT, MARGIN);
+        assert.strictEqual(windows.length, 2, 'expected the 30-minute closure to split the window');
+        assert.strictEqual(windows[0].end.time.getTime(), data[4].time.getTime());
+        assert.strictEqual(windows[1].start.time.getTime(), data[8].time.getTime());
+    });
+
+    await test('no window ever spans a sample the boat does not fit under', () => {
+        const data = series([1.7, 1.5, 1.2, 1.0, 1.2, 1.9, 2.0, 1.9, 1.2, 1.0, 1.4, 1.75]);
+        const required = BOAT + MARGIN;
+        for (const w of calculateSafeWindows(data, SPAN, BOAT, MARGIN)) {
+            for (const sample of data) {
+                if (sample.time < w.start.time || sample.time > w.end.time) continue;
+                assert.ok(SPAN - sample.height - required >= 0,
+                    'window ' + w.start.time.toISOString() + '-' + w.end.time.toISOString() +
+                    ' spans an impassable sample at ' + sample.time.toISOString());
+            }
+        }
+    });
+
+    await test('a window reports its safe core, not just its extent', () => {
+        const data = series([1.7, 1.5, 1.2, 1.0, 1.2, 1.5, 1.75]);
+        const [w] = calculateSafeWindows(data, SPAN, BOAT, MARGIN);
+        assert.ok(w.hasSafeCore);
+        assert.strictEqual(w.safeStart.time.getTime(), data[2].time.getTime());
+        assert.strictEqual(w.safeEnd.time.getTime(), data[4].time.getTime());
+        assert.ok(w.safeStart.time > w.start.time && w.safeEnd.time < w.end.time);
+    });
+
+    await test('a window that never reaches 0.5m spare is caution throughout', () => {
+        const data = series([1.75, 1.6, 1.55, 1.6, 1.75]);
+        const [w] = calculateSafeWindows(data, SPAN, BOAT, MARGIN);
+        assert.strictEqual(w.hasSafeCore, false);
+        assert.strictEqual(w.safeStart, null);
+        assert.ok(w.minClearance >= 0 && w.maxClearance < SAFE_SPARE_M_LOCAL);
+    });
+
+    await test('the best moment in a window is its lowest tide', () => {
+        const data = series([1.7, 1.5, 0.8, 1.0, 1.75]);
+        const [w] = calculateSafeWindows(data, SPAN, BOAT, MARGIN);
+        assert.strictEqual(w.best.time.getTime(), data[2].time.getTime());
+        assert.ok(Math.abs(w.maxClearance - (SPAN - 0.8 - (BOAT + MARGIN))) < 1e-9);
+    });
+
+    await test('a real day of tides yields windows that are all genuinely passable', () => {
+        const points = parseLinzCsv(BUNDLED_CSV, new Date(2026, 8, 4));
+        setAdjacent(null, null);
+        const hourly = generateHourlyTideData(buildInterpolationPoints(points, null, null), new Date(2026, 8, 4));
+        const required = BOAT + MARGIN;
+        const windows = calculateSafeWindows(hourly, SPAN, BOAT, MARGIN);
+        assert.ok(windows.length > 0, 'expected at least one window on a real day');
+        for (const w of windows) {
+            assert.ok(w.minClearance >= 0);
+            for (const s of hourly) {
+                if (s.time < w.start.time || s.time > w.end.time) continue;
+                assert.ok(SPAN - s.height - required >= 0);
+            }
+        }
     });
 
     console.log('\n' + '='.repeat(60));

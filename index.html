@@ -2956,43 +2956,68 @@
         }
 
         // Calculate safe windows for chart display (shared between Check Now and Find Times)
+        // Spare clearance at or above this counts as "safe"; below it, and down to
+        // zero, is "caution". Below zero the boat does not fit at all.
+        const SAFE_SPARE_M = 0.5;
+
+        // A passage window is a run of CONSECUTIVE samples the boat fits under.
+        // It breaks on any impassable sample: a window must never span a period the
+        // boat does not fit, however brief. (Before v10 the joiner glued runs up to
+        // 1.5 hours apart, so a short closure around a weak high tide was reported
+        // as continuous passage.)
+        //
+        // Within a window, the stretch holding at least SAFE_SPARE_M is its safe
+        // core. A window that never reaches it is caution throughout.
         function calculateSafeWindows(hourlyData, spanClearance, boatHeight, safetyMargin) {
             const clearanceNeeded = boatHeight + safetyMargin;
-            const safePoints = [];
-
-            for (let tide of hourlyData) {
-                const actualClearance = spanClearance - tide.height;
-                const spare = actualClearance - clearanceNeeded;
-                if (spare >= 0) {
-                    safePoints.push({
-                        time: tide.time,
-                        tideHeight: tide.height,
-                        actualClearance: actualClearance,
-                        spareClearance: spare
-                    });
-                }
-            }
-
             const windows = [];
             let current = null;
 
-            for (let i = 0; i < safePoints.length; i++) {
-                const safe = safePoints[i];
+            for (const tide of hourlyData) {
+                const actualClearance = spanClearance - tide.height;
+                const spare = actualClearance - clearanceNeeded;
+
+                if (spare < 0) {
+                    if (current) windows.push(current);
+                    current = null;
+                    continue;
+                }
+
+                const point = {
+                    time: tide.time,
+                    tideHeight: tide.height,
+                    actualClearance: actualClearance,
+                    spareClearance: spare
+                };
+
                 if (!current) {
-                    current = { start: safe, end: safe, minClearance: safe.spareClearance, maxClearance: safe.spareClearance };
+                    current = {
+                        start: point,
+                        end: point,
+                        best: point,
+                        minClearance: spare,
+                        maxClearance: spare,
+                        safeStart: null,
+                        safeEnd: null
+                    };
                 } else {
-                    const hoursDiff = (safe.time - current.end.time) / (1000 * 60 * 60);
-                    if (hoursDiff <= 1.5) {
-                        current.end = safe;
-                        current.minClearance = Math.min(current.minClearance, safe.spareClearance);
-                        current.maxClearance = Math.max(current.maxClearance, safe.spareClearance);
-                    } else {
-                        windows.push(current);
-                        current = { start: safe, end: safe, minClearance: safe.spareClearance, maxClearance: safe.spareClearance };
+                    current.end = point;
+                    current.minClearance = Math.min(current.minClearance, spare);
+                    if (spare > current.maxClearance) {
+                        current.maxClearance = spare;
+                        current.best = point;
                     }
                 }
+
+                if (spare >= SAFE_SPARE_M) {
+                    if (!current.safeStart) current.safeStart = point;
+                    current.safeEnd = point;
+                }
             }
+
             if (current) windows.push(current);
+
+            for (const w of windows) w.hasSafeCore = (w.safeStart !== null);
             return windows;
         }
 
@@ -3220,54 +3245,7 @@
             }
 
             const clearanceNeeded = boatHeight + safetyMargin;
-            const safeWindows = [];
-            
-            for (let tide of fullDayTideData) {
-                const actualClearance = selectedSpanClearance - tide.height;
-                const spareClearance = actualClearance - clearanceNeeded;
-                if (spareClearance >= 0) {
-                    safeWindows.push({ 
-                        time: tide.time, 
-                        tideHeight: tide.height,
-                        actualClearance: actualClearance,
-                        spareClearance: spareClearance 
-                    });
-                }
-            }
-
-            const windows = [];
-            let currentWindow = null;
-            
-            for (let i = 0; i < safeWindows.length; i++) {
-                const safe = safeWindows[i];
-                
-                if (!currentWindow) {
-                    currentWindow = { 
-                        start: safe, 
-                        end: safe,
-                        minClearance: safe.spareClearance,
-                        maxClearance: safe.spareClearance
-                    };
-                } else {
-                    const hoursDiff = (safe.time - currentWindow.end.time) / (1000 * 60 * 60);
-                    
-                    if (hoursDiff <= 1.5) {
-                        currentWindow.end = safe;
-                        currentWindow.minClearance = Math.min(currentWindow.minClearance, safe.spareClearance);
-                        currentWindow.maxClearance = Math.max(currentWindow.maxClearance, safe.spareClearance);
-                    } else {
-                        windows.push(currentWindow);
-                        currentWindow = { 
-                            start: safe, 
-                            end: safe,
-                            minClearance: safe.spareClearance,
-                            maxClearance: safe.spareClearance
-                        };
-                    }
-                }
-            }
-            
-            if (currentWindow) windows.push(currentWindow);
+            const windows = calculateSafeWindows(fullDayTideData, selectedSpanClearance, boatHeight, safetyMargin);
             // Get requested time (if entered) for chart marker
             const preferredTime = document.getElementById('preferredTime').value;
             let reqTime = null;
