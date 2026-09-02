@@ -3021,6 +3021,113 @@
             return windows;
         }
 
+        // ============================================================
+        // MULTI-DAY FORECAST
+        // ============================================================
+
+        // Year CSVs held for the life of the page, so a 7- or 14-day range costs one
+        // fetch per year it spans rather than one per day.
+        const yearCsvCache = new Map();
+
+        async function getYearCsv(year, forceRefresh = false) {
+            if (!forceRefresh && yearCsvCache.has(year)) return yearCsvCache.get(year);
+            const response = await TideDataService.fetchTideDataForYear(year, forceRefresh);
+            const csvText = await response.text();
+            yearCsvCache.set(year, csvText);
+            return csvText;
+        }
+
+        function isYearAvailable(year) {
+            return TideDataService.config.availableYears.includes(year);
+        }
+
+        // Midnight local, n days from date. Going through the Y/M/D constructor keeps
+        // the result on a real wall-clock midnight across a DST transition.
+        function addDays(date, n) {
+            const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            d.setDate(d.getDate() + n);
+            return d;
+        }
+
+        // Tide points for one day, from whichever year's CSV covers it. Returns [] for
+        // a day outside the published range rather than throwing, so one missing day
+        // at the end of a range does not cost the rest of it.
+        async function getDayPoints(date, forceRefresh = false) {
+            const year = date.getFullYear();
+            if (!isYearAvailable(year)) return [];
+            try {
+                return parseLinzCsv(await getYearCsv(year, forceRefresh), date);
+            } catch (e) {
+                console.warn('No tide data for', date.toDateString(), e);
+                return [];
+            }
+        }
+
+        // LINZ publishes alternating highs and lows without labelling them. A point
+        // above both neighbours is a high, below both a low; the first and last points
+        // of a day are judged against their single neighbour.
+        function classifyTidePoints(points) {
+            return points.map((p, i) => {
+                const prev = points[i - 1], next = points[i + 1];
+                let isHigh;
+                if (prev && next) isHigh = p.height > prev.height && p.height > next.height;
+                else if (next) isHigh = p.height > next.height;
+                else if (prev) isHigh = p.height > prev.height;
+                else isHigh = false;
+                return Object.assign({}, p, { kind: isHigh ? 'high' : 'low' });
+            });
+        }
+
+        // Passage windows for `count` consecutive days from `startDate`. Each day is
+        // interpolated against its own neighbours, so times before the day's first
+        // tide and after its last are interpolated rather than held flat at the
+        // nearest height. A range crossing 31 December pulls both years.
+        async function computeDayForecast(startDate, count, spanClearance, boatHeight, safetyMargin, forceRefresh = false) {
+            const first = addDays(startDate, -1);
+            const span = count + 2; // the range, plus one anchor day either side
+
+            const years = new Set();
+            for (let i = 0; i < span; i++) years.add(addDays(first, i).getFullYear());
+            for (const year of years) {
+                if (isYearAvailable(year)) await getYearCsv(year, forceRefresh);
+            }
+
+            const points = [];
+            for (let i = 0; i < span; i++) points.push(await getDayPoints(addDays(first, i)));
+
+            const days = [];
+            for (let i = 1; i <= count; i++) {
+                const date = addDays(first, i);
+                const dayPoints = points[i];
+
+                if (dayPoints.length === 0) {
+                    days.push({ date, points: [], series: [], windows: [], unavailable: true });
+                    continue;
+                }
+
+                const prev = points[i - 1];
+                const next = points[i + 1];
+                const series = generateHourlyTideData(
+                    buildInterpolationPoints(
+                        dayPoints,
+                        prev.length ? prev[prev.length - 1] : null,
+                        next.length ? next[0] : null
+                    ),
+                    date
+                );
+
+                days.push({
+                    date: date,
+                    points: classifyTidePoints(dayPoints),
+                    series: series,
+                    windows: calculateSafeWindows(series, spanClearance, boatHeight, safetyMargin),
+                    unavailable: false
+                });
+            }
+
+            return days;
+        }
+
         async function checkClearance() {
             const calculationId = Date.now(); // Unique ID for this calculation
             

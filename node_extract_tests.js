@@ -43,7 +43,7 @@ function extractBlock(source, startIndex) {
 }
 
 function extractFunction(name) {
-    const marker = new RegExp('\\n\\s*function ' + name + '\\s*\\(');
+    const marker = new RegExp('\\n\\s*(?:async\\s+)?function ' + name + '\\s*\\(');
     const match = marker.exec(html);
     assert.ok(match, 'could not find function ' + name + ' in index.html');
     return extractBlock(html, match.index + 1);
@@ -72,7 +72,13 @@ const FUNCTIONS = [
     'findBracketingPoints',
     'generateHourlyTideData',
     'interpolateTideHeight',
-    'calculateSafeWindows'
+    'calculateSafeWindows',
+    'isYearAvailable',
+    'addDays',
+    'classifyTidePoints',
+    'getYearCsv',
+    'getDayPoints',
+    'computeDayForecast'
 ];
 
 // ------------------------------------------------------------------ sandbox
@@ -101,9 +107,10 @@ const quietConsole = {
 // interpolateTideHeight reads these module-level globals in the app
 const source = 'let nextDayFirstPoint = null, prevDayLastPoint = null;\n' +
     extractConst('SAFE_SPARE_M') + '\n' +
+    extractConst('yearCsvCache') + '\n' +
     FUNCTIONS.map(extractFunction).join('\n\n') + '\n\n' + extractService() +
     '\nfunction setAdjacent(prev, next) { prevDayLastPoint = prev; nextDayFirstPoint = next; }' +
-    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent, SAFE_SPARE_M };';
+    '\nreturn { ' + FUNCTIONS.join(', ') + ', TideDataService, setAdjacent, SAFE_SPARE_M, yearCsvCache };';
 
 const api = new Function('localStorage', 'fetch', 'console', 'AbortController', source)(
     localStorageStub, fetchStub, quietConsole, AbortController
@@ -112,7 +119,8 @@ const api = new Function('localStorage', 'fetch', 'console', 'AbortController', 
 const {
     isLinzDataRow, parseLinzCsv, ruleOfTwelfthsHeight, buildInterpolationPoints,
     generateHourlyTideData, getNZTimezoneOffset, interpolateTideHeight,
-    calculateSafeWindows, TideDataService, setAdjacent
+    calculateSafeWindows, classifyTidePoints, computeDayForecast, addDays,
+    TideDataService, setAdjacent
 } = api;
 
 const SAFE_SPARE_M_LOCAL = api.SAFE_SPARE_M;
@@ -163,6 +171,7 @@ function resetState() {
     TideDataService.bundledCsv = {};
     TideDataService.bundledCsvPending = {};
     TideDataService.lastDataSource = null;
+    api.yearCsvCache.clear();
 }
 
 function csvResponse(text, ok = true, status = 200) {
@@ -604,6 +613,96 @@ async function main() {
                 assert.ok(SPAN - s.height - required >= 0);
             }
         }
+    });
+
+    console.log('\nMulti-day forecast');
+
+    // Serve the real bundled files, so a range is exercised against published data.
+    function serveBundled() {
+        fetchHandler = url => {
+            const m = /tides\/auckland_(\d{4})\.csv/.exec(String(url));
+            if (m && BUNDLED_YEARS.includes(Number(m[1]))) {
+                return csvResponse(fs.readFileSync(path.join(TIDES_DIR, 'auckland_' + m[1] + '.csv'), 'utf8'));
+            }
+            return csvResponse('', false, 404);
+        };
+    }
+
+    await test('a seven-day range returns seven days, each with its own tides', async () => {
+        resetState();
+        serveBundled();
+        const days = await computeDayForecast(new Date(2026, 8, 2), 7, 6.2, 3.9, 0.5);
+        assert.strictEqual(days.length, 7);
+        days.forEach((d, i) => {
+            assert.strictEqual(d.unavailable, false);
+            assert.ok(d.points.length >= 3, 'day ' + i + ' has only ' + d.points.length + ' tide points');
+            assert.strictEqual(d.series.length, 144, 'expected a 10-minute series over 24 hours');
+        });
+        const dates = days.map(d => d.date.getDate());
+        assert.deepStrictEqual(dates, [2, 3, 4, 5, 6, 7, 8]);
+    });
+
+    await test('a range crossing 31 December pulls both years', async () => {
+        resetState();
+        serveBundled();
+        const days = await computeDayForecast(new Date(2026, 11, 29), 7, 6.2, 3.9, 0.5);
+        assert.strictEqual(days.length, 7);
+        days.forEach(d => assert.strictEqual(d.unavailable, false, d.date.toDateString() + ' came back unavailable'));
+        assert.strictEqual(days[0].date.getFullYear(), 2026);
+        assert.strictEqual(days[6].date.getFullYear(), 2027);
+        assert.strictEqual(days[6].date.getDate(), 4);
+    });
+
+    await test('each year is fetched once, not once per day', async () => {
+        resetState();
+        serveBundled();
+        await computeDayForecast(new Date(2026, 8, 2), 14, 6.2, 3.9, 0.5);
+        const yearFetches = fetchLog.filter(u => /auckland_2026\.csv/.test(u)).length;
+        assert.strictEqual(yearFetches, 1, 'expected one fetch for 2026, saw ' + yearFetches);
+    });
+
+    await test('a day past the published range is marked unavailable, not fatal', async () => {
+        resetState();
+        serveBundled();
+        const lastYear = TideDataService.config.availableYears[TideDataService.config.availableYears.length - 1];
+        const days = await computeDayForecast(new Date(lastYear, 11, 29), 7, 6.2, 3.9, 0.5);
+        assert.strictEqual(days.length, 7);
+        assert.ok(days.some(d => d.unavailable), 'expected days past the range to be flagged');
+        assert.ok(days.some(d => !d.unavailable), 'expected the days inside the range to survive');
+    });
+
+    await test('day-edge times are interpolated, not held flat', async () => {
+        resetState();
+        serveBundled();
+        const [day] = await computeDayForecast(new Date(2026, 8, 4), 1, 6.2, 3.9, 0.5);
+        const firstTide = day.points[0].time;
+        const before = day.series.filter(s => s.time < firstTide).map(s => s.height);
+        assert.ok(before.length > 1, 'expected samples before the day\'s first tide');
+        assert.ok(new Set(before.map(h => h.toFixed(4))).size > 1,
+            'heights before the first tide are flat, so the previous day was not used');
+    });
+
+    await test('highs and lows alternate and match the extremes of the day', () => {
+        const points = classifyTidePoints(parseLinzCsv(BUNDLED_CSV, new Date(2026, 8, 4)));
+        assert.ok(points.length >= 3);
+        points.forEach((p, i) => {
+            if (i === 0) return;
+            assert.notStrictEqual(p.kind, points[i - 1].kind, 'two ' + p.kind + 's in a row');
+        });
+        const highs = points.filter(p => p.kind === 'high').map(p => p.height);
+        const lows = points.filter(p => p.kind === 'low').map(p => p.height);
+        assert.ok(Math.min(...highs) > Math.max(...lows), 'a high came in below a low');
+    });
+
+    await test('addDays lands on wall-clock midnight across the DST change', () => {
+        // NZDT ends on the first Sunday of April at 03:00; 5 April 2026 is that day.
+        const d = addDays(new Date(2026, 3, 4), 1);
+        assert.strictEqual(d.getDate(), 5);
+        assert.strictEqual(d.getMonth(), 3);
+        assert.strictEqual(d.getHours(), 0);
+        const back = addDays(new Date(2026, 3, 5), -1);
+        assert.strictEqual(back.getDate(), 4);
+        assert.strictEqual(back.getHours(), 0);
     });
 
     console.log('\n' + '='.repeat(60));
