@@ -248,6 +248,12 @@
         }
 
         .inset-btn {
+            /* manipulation kills the double-tap zoom delay; the rest stops a long
+               press raising the text selection or magnifier over the control. */
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
             width: 36px;
             height: var(--tap);
             border-radius: 11px;
@@ -371,7 +377,7 @@
         /* --------------------------------------------------------- provenance */
 
         .provenance {
-            margin: 14px 14px 0;
+            margin: 18px 14px 0;
             padding: 11px 14px;
             border-radius: 14px;
             background: var(--recessed);
@@ -396,11 +402,16 @@
 
         /* ----------------------------------------------------------- day list */
 
+        /* The answer above and the week below are two different questions. Give the
+           break room and a rule, rather than letting the list crowd the result. */
         .days-head {
             display: flex; justify-content: space-between; align-items: center;
-            margin: 16px 20px 0;
+            margin: 34px 18px 0;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
             gap: 10px;
         }
+        .days-head .label { font-size: 13px; }
 
         .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
         .toggle-track {
@@ -415,9 +426,9 @@
         .toggle[aria-pressed="true"] .toggle-track { background: var(--navy); }
         .toggle[aria-pressed="true"] .toggle-knob { transform: translateX(18px); background: var(--paper); }
 
-        .days { margin: 8px 10px 0; display: flex; flex-direction: column; gap: 2px; }
+        .days { margin: 14px 10px 0; display: flex; flex-direction: column; gap: 4px; }
 
-        .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 14px 6px; font-size: 12px; color: var(--muted); }
+        .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 14px 10px; font-size: 12px; color: var(--muted); }
         .legend span { display: flex; align-items: center; gap: 6px; }
 
         .dot { width: 9px; height: 9px; border-radius: 5px; flex: 0 0 auto; }
@@ -445,50 +456,64 @@
         .win-note { font-size: 12.5px; color: var(--muted); }
         .day-empty { font-size: 13px; color: var(--muted); padding-top: 2px; }
 
-        .days-more { padding: 11px 14px; font-size: 14px; font-weight: 600; color: var(--link); text-align: left; }
+        .days-more { padding: 16px 14px 6px; font-size: 14px; font-weight: 600; color: var(--link); text-align: left; }
 
         .day-block { display: flex; flex-direction: column; }
-        .day-block.open { background: var(--card); border-radius: 16px; border: 1px solid var(--border); }
-        .day-block.open > .day { border-color: transparent; background: transparent; }
+
+        /* An open day is lifted clear of the rows either side of it, so the detail
+           reads as belonging to that day rather than running into its neighbours. */
+        .day-block.open {
+            background: var(--card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            margin: 12px 0;
+            box-shadow: 0 10px 28px rgba(10, 22, 40, 0.10);
+        }
+        .day-block.open > .day { border-color: transparent; background: transparent; padding-bottom: 14px; }
 
         .day-detail {
-            padding: 0 14px 14px;
+            margin: 0 18px;
+            padding: 18px 0 20px;
+            border-top: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 20px;
         }
         .day-detail-head {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
             gap: 10px;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 700;
         }
-        .day-detail-head .close { font-size: 13px; font-weight: 600; color: var(--link); }
+        .day-detail-head .close { font-size: 13px; font-weight: 600; color: var(--link); white-space: nowrap; }
 
-        .curve { width: 100%; height: auto; display: block; }
+        .curve { width: 100%; height: auto; display: block; margin-bottom: 2px; }
 
         .extremes {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px 16px;
+            gap: 8px 18px;
+            padding: 12px 0;
+            border-top: 1px solid var(--app-bg);
+            border-bottom: 1px solid var(--app-bg);
             font-size: 12.5px;
             color: var(--muted-45);
         }
         .extremes b { color: var(--navy); font-weight: 700; }
 
-        .detail-window { display: flex; flex-direction: column; gap: 8px; }
-        .detail-window + .detail-window { padding-top: 12px; border-top: 1px solid var(--border); }
+        .detail-window { display: flex; flex-direction: column; gap: 12px; }
+        .detail-window + .detail-window { padding-top: 20px; border-top: 1px solid var(--app-bg); }
         .detail-window-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
         .detail-window-head .times { font-size: 17px; font-weight: 700; }
         .detail-window-head .dur { font-size: 12.5px; color: var(--muted); margin-left: auto; }
 
-        .moments { display: flex; gap: 6px; }
+        .moments { display: flex; gap: 8px; }
         .moment {
             flex: 1;
             min-width: 0;
-            padding: 10px;
+            padding: 12px 10px;
             border-radius: 12px;
             background: var(--app-bg);
             display: flex;
@@ -496,14 +521,15 @@
             gap: 1px;
         }
         .moment.best { background: var(--safe-soft); }
-        .moment .when { font-size: 12px; font-weight: 600; color: var(--muted-45); }
+        /* All three labels hold one line, so the cards keep a common baseline. */
+        .moment .when { font-size: 11.5px; font-weight: 600; color: var(--muted-45); white-space: nowrap; }
         .moment.best .when { color: var(--safe-deep); }
         .moment .gap { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
         .moment .spare { font-size: 12px; color: var(--muted); }
         .moment.best .spare { color: var(--safe-deep); }
 
         .detail-safe { font-size: 12.5px; color: var(--muted-45); }
-        .detail-actions { display: flex; gap: 8px; }
+        .detail-actions { display: flex; gap: 8px; margin-top: 4px; }
         .detail-actions button {
             flex: 1;
             height: var(--tap);
@@ -515,7 +541,7 @@
         }
 
         .best {
-            margin: 14px 14px 0;
+            margin: 20px 14px 0;
             padding: 14px 16px;
             background: var(--card);
             border-radius: 16px;
@@ -846,7 +872,8 @@
                 min-width: 0;
             }
             .day-card:empty { display: none; }
-            .day-card .day-detail { padding: 14px 18px 16px; }
+            .day-card .day-detail { margin: 0 20px; padding: 18px 0 20px; border-top: 0; }
+            .day-card { padding: 6px 0 10px; }
             .day-card .day-detail-head .close { display: none; }
             .day-card .detail-actions { display: none; }
             .best { align-self: start; }
@@ -2280,6 +2307,18 @@
 
         const MARGIN_STEP = 0.05;
         const BOAT_STEP = 0.05;
+        // Bounds for the steppers. Nothing on this coast needs a 20 m margin, and a
+        // value that can climb without limit turns a stuck key into runaway numbers.
+        const MARGIN_MIN = 0, MARGIN_MAX = 3.00;
+        const BOAT_MIN = 0, BOAT_MAX = 15.00;
+
+        // Press-and-hold repeat: eases in from a controllable rate rather than
+        // opening at full speed, and gives up after MAX_HOLD_MS so no hold can run
+        // away even if the release is never delivered.
+        const REPEAT_START_MS = 180;
+        const REPEAT_FAST_MS = 70;
+        const REPEAT_RAMP_MS = 12;
+        const MAX_HOLD_MS = 6000;
         const MARGIN_PRESETS = [0, 0.30, 0.50, 1.00];
         const BOAT_DEFAULT = 3.50;
         const LONG_WINDOW_MINUTES = 60;
@@ -3195,16 +3234,29 @@
             recalcFromLoaded();
         }
 
+        function clamp(value, lo, hi) { return Math.min(hi, Math.max(lo, value)); }
+        function round2(value) { return Math.round(value * 100) / 100; }
+
+        // Recomputing a week of windows on every 90ms repeat makes a long press
+        // stutter and look stuck. The number under the thumb moves immediately; the
+        // week catches up once the value settles.
+        let recalcTimer = null;
+        function scheduleRecalc() {
+            clearTimeout(recalcTimer);
+            recalcTimer = setTimeout(recalcFromLoaded, 120);
+        }
+
         function stepValue(which, delta) {
             if (which === 'margin') {
-                ui.margin = Math.max(0, Math.round((ui.margin + delta * MARGIN_STEP) * 100) / 100);
+                ui.margin = round2(clamp(ui.margin + delta * MARGIN_STEP, MARGIN_MIN, MARGIN_MAX));
                 saveSetting('safetyMargin', ui.margin);
             } else {
                 const from = ui.boat === null ? BOAT_DEFAULT - delta * BOAT_STEP : ui.boat;
-                ui.boat = Math.max(0, Math.round((from + delta * BOAT_STEP) * 100) / 100);
+                ui.boat = round2(clamp(from + delta * BOAT_STEP, BOAT_MIN, BOAT_MAX));
                 saveSetting('boatHeight', ui.boat);
             }
-            recalcFromLoaded();
+            renderControls();
+            scheduleRecalc();
         }
 
         function buildSpanButtons() {
@@ -3223,16 +3275,65 @@
             ).join('');
         }
 
-        // Long-press on a stepper repeats, so 0.05 m steps are not a chore.
+        // Press and hold repeats the step, so 0.05 m increments are not a chore.
+        //
+        // Every stepper registers its own stop here, and any pointer release, lost
+        // pointer, blurred window or hidden tab stops all of them. The first version
+        // kept the timer ids in closure variables and overwrote them on the next
+        // press without clearing them first: the orphaned interval then ran forever
+        // with nothing left holding a reference to stop it, and the numbers ran away.
+        const repeatStoppers = [];
+        function stopAllRepeats() { repeatStoppers.forEach(stop => stop()); }
+
         function bindRepeat(button, action) {
-            let holdTimer = null, repeatTimer = null;
-            const stop = () => { clearTimeout(holdTimer); clearInterval(repeatTimer); };
-            button.addEventListener('pointerdown', () => {
-                holdTimer = setTimeout(() => { repeatTimer = setInterval(action, 90); }, 450);
+            let holdTimer = null, repeatTimer = null, repeated = false;
+
+            const stop = () => {
+                clearTimeout(holdTimer); holdTimer = null;
+                clearTimeout(repeatTimer); repeatTimer = null;
+            };
+            repeatStoppers.push(stop);
+
+            button.addEventListener('pointerdown', e => {
+                stop();
+                repeated = false;
+                // Capture the pointer so the release lands back on this button even
+                // if the thumb drifts off it.
+                if (e.pointerId !== undefined && button.setPointerCapture) {
+                    try { button.setPointerCapture(e.pointerId); } catch (err) { /* not captureable */ }
+                }
+                holdTimer = setTimeout(() => {
+                    const startedAt = Date.now();
+                    let period = REPEAT_START_MS;
+
+                    // Re-armed each tick rather than a fixed interval, so the repeat
+                    // can ease in and so it always has a hard stop of its own. A hold
+                    // can never outlive MAX_HOLD_MS, whatever happens to the release
+                    // event - a swallowed pointerup can no longer leave it running.
+                    const tick = () => {
+                        repeated = true;
+                        action();
+                        if (Date.now() - startedAt >= MAX_HOLD_MS) { stop(); return; }
+                        period = Math.max(REPEAT_FAST_MS, period - REPEAT_RAMP_MS);
+                        repeatTimer = setTimeout(tick, period);
+                    };
+                    repeatTimer = setTimeout(tick, period);
+                }, 450);
             });
-            ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+
+            ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev =>
                 button.addEventListener(ev, stop));
-            button.addEventListener('click', action);
+
+            // A long press has already stepped; the click that follows the release
+            // must not add one more.
+            button.addEventListener('click', () => {
+                if (repeated) { repeated = false; return; }
+                action();
+            });
+
+            // A long press on touch otherwise raises the selection or context menu,
+            // which swallows the release event that would have stopped the repeat.
+            button.addEventListener('contextmenu', e => e.preventDefault());
         }
 
         // showPicker is the only way to open a native date picker from a button;
@@ -3339,6 +3440,13 @@
             $('refreshBtnWide').addEventListener('click', () => recompute(true));
             $('errorRetry').addEventListener('click', () => recompute(true));
             $('errorCached').addEventListener('click', () => recompute(false));
+
+            ['pointerup', 'pointercancel'].forEach(ev =>
+                window.addEventListener(ev, stopAllRepeats));
+            window.addEventListener('blur', stopAllRepeats);
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) stopAllRepeats();
+            });
 
             // The header figure is a clock reading; keep it honest without a reload.
             setInterval(() => { if (!ui.busy) renderHeader(); }, 60000);
