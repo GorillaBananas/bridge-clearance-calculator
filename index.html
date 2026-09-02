@@ -92,6 +92,7 @@
             /* Curve fills: the band colours, lightened so the tide line reads over them */
             --curve-caution: #FDEBC4;
             --curve-safe: #C6EFD5;
+            --caution-soft: #FBDD9C;
         }
 
         @supports (color: oklch(0.8 0.16 155)) {
@@ -122,6 +123,7 @@
                 --on-navy-84: oklch(0.84 0.03 232);
                 --curve-caution: oklch(0.95 0.04 85);
                 --curve-safe: oklch(0.93 0.07 155);
+                --caution-soft: oklch(0.90 0.10 85);
             }
         }
 
@@ -848,6 +850,12 @@
             }
             .week-band { position: absolute; top: 0; bottom: 0; background: var(--caution); }
             .week-band.core { background: var(--safe); }
+            /* A lapped tail is hatched at its head, so it reads as running in from
+               the previous row rather than opening at midnight. */
+            .week-band.lap {
+                background: repeating-linear-gradient(
+                    115deg, var(--caution) 0 7px, var(--caution-soft) 7px 14px);
+            }
             .week-band-label {
                 position: absolute; top: 0; bottom: 0;
                 display: flex; align-items: center; justify-content: center;
@@ -874,7 +882,6 @@
             .day-card:empty { display: none; }
             .day-card .day-detail { margin: 0 20px; padding: 18px 0 20px; border-top: 0; }
             .day-card { padding: 6px 0 10px; }
-            .day-card .day-detail-head .close { display: none; }
             .day-card .detail-actions { display: none; }
             .best { align-self: start; }
 
@@ -2483,6 +2490,22 @@
             return win.hasSafeCore ? 'safe' : 'caution';
         }
 
+        // A window is carried on the day it opens, so a day that is still under an
+        // open window at midnight has to look back to find it. Without this the
+        // week grid clips the bar at 24:00 and shows nothing at all on the next
+        // row, which reads as though passage closed at midnight.
+        function lapFromPreviousDay(date) {
+            const all = ui.forecastAll;
+            const i = all.findIndex(d => dayDelta(d.date, date) === 0);
+            if (i <= 0) return null;
+
+            const prev = all[i - 1];
+            if (prev.unavailable || prev.windows.length === 0) return null;
+
+            const last = prev.windows[prev.windows.length - 1];
+            return dayDelta(last.end.time, date) === 0 ? last : null;
+        }
+
         function findDay(date) {
             return ui.forecast.find(d => dayDelta(d.date, date) === 0) || null;
         }
@@ -2723,7 +2746,7 @@
                         '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' +
                         body +
                     '</button>' +
-                    (isOpen ? renderDayDetail(day) : '') +
+                    (isOpen ? renderDayDetail(day, true) : '') +
                 '</div>';
             }).join('');
 
@@ -2761,7 +2784,7 @@
 
         // The expanded day: the tide curve with both limits drawn on it, the day's
         // highs and lows, and what each window opens, peaks and closes at.
-        function renderDayDetail(day) {
+        function renderDayDetail(day, collapsible) {
             if (day.unavailable) {
                 return '<div class="day-detail"><span class="detail-safe">No published predictions for this day.</span></div>';
             }
@@ -2780,7 +2803,9 @@
             return '<div class="day-detail">' +
                 '<div class="day-detail-head">' +
                     '<span>' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
-                    '<span class="close">Tap to close &#8963;</span>' +
+                    (collapsible
+                        ? '<button type="button" class="close" data-collapse>Tap to close &#8963;</button>'
+                        : '') +
                 '</div>' +
                 renderDayCurve(day) +
                 '<div class="extremes">' + extremes + '</div>' +
@@ -2986,8 +3011,9 @@
 
         // The same windows as the day rows, laid on a 24-hour clock: a caution band
         // with the safe core inside it, positioned by the fraction of the day each
-        // covers. A window running past midnight is clipped at the day's edge; it is
-        // drawn again on the row it continues into.
+        // covers. A window running past midnight is clipped at this day's edge and
+        // its remainder is drawn at the start of the next row, so passage that laps
+        // into the small hours is visible on the morning it is still open.
         function renderWeek() {
             const host = $('week');
 
@@ -3008,37 +3034,50 @@
                 const dayStart = startOfDay(day.date).getTime();
                 const pct = t => Math.max(0, Math.min(100, ((t - dayStart) / 86400000) * 100));
 
+                // A window drawn on this row, clipped to the day at both ends. `lap`
+                // marks the tail of one that opened yesterday.
+                const drawWindow = (win, lap) => {
+                    const left = pct(win.start.time.getTime());
+                    const right = pct(win.end.time.getTime() + 10 * 60000);
+                    const width = right - left;
+                    if (width <= 0) return '';
+
+                    let out = '<span class="week-band' + (lap ? ' lap' : '') +
+                        '" style="left:' + left.toFixed(2) + '%; width:' + width.toFixed(2) + '%"></span>';
+
+                    if (win.safeStart) {
+                        const sl = pct(win.safeStart.time.getTime());
+                        const sr = pct(win.safeEnd.time.getTime() + 10 * 60000);
+                        if (sr > sl) {
+                            out += '<span class="week-band core" style="left:' + sl.toFixed(2) +
+                                '%; width:' + (sr - sl).toFixed(2) + '%"></span>';
+                        }
+                    }
+
+                    if (width >= 8) {
+                        // The tail of a window reads as an end time, not a range: it
+                        // did not open on this day.
+                        const label = lap
+                            ? '&rarr; ' + fmtTime(win.end.time)
+                            : fmtTime(win.start.time) + '–' + fmtTime(win.end.time);
+                        out += '<span class="week-band-label" style="left:' + left.toFixed(2) +
+                            '%; width:' + width.toFixed(2) + '%">' + label + '</span>';
+                    }
+                    return out;
+                };
+
+                const lapWin = day.unavailable ? null : lapFromPreviousDay(day.date);
+                const own = day.unavailable ? [] : windowsToShow(day);
+
                 let bands = '';
                 if (day.unavailable) {
                     bands = '<span class="week-empty">No published predictions</span>';
-                } else if (windowsToShow(day).length === 0) {
+                } else if (own.length === 0 && !lapWin) {
                     bands = '<span class="week-empty">' +
                         (day.windows.length ? 'No window over an hour' : 'No passage this day') + '</span>';
                 } else {
-                    for (const win of windowsToShow(day)) {
-                        const left = pct(win.start.time.getTime());
-                        const right = pct(win.end.time.getTime() + 10 * 60000);
-                        const width = right - left;
-                        if (width <= 0) continue;
-
-                        bands += '<span class="week-band" style="left:' + left.toFixed(2) + '%; width:' +
-                            width.toFixed(2) + '%"></span>';
-
-                        if (win.safeStart) {
-                            const sl = pct(win.safeStart.time.getTime());
-                            const sr = pct(win.safeEnd.time.getTime() + 10 * 60000);
-                            if (sr > sl) {
-                                bands += '<span class="week-band core" style="left:' + sl.toFixed(2) +
-                                    '%; width:' + (sr - sl).toFixed(2) + '%"></span>';
-                            }
-                        }
-
-                        if (width >= 8) {
-                            bands += '<span class="week-band-label" style="left:' + left.toFixed(2) + '%; width:' +
-                                width.toFixed(2) + '%">' + fmtTime(win.start.time) + '–' +
-                                fmtTime(win.end.time) + '</span>';
-                        }
-                    }
+                    if (lapWin) bands += drawWindow(lapWin, true);
+                    for (const win of own) bands += drawWindow(win, false);
                 }
 
                 if (isToday) {
@@ -3062,7 +3101,7 @@
             if (required() === null) { host.innerHTML = ''; return; }
             const key = ui.expandedDate;
             const day = (key && ui.forecast.find(d => fmtDateValue(d.date) === key)) || ui.selectedDay;
-            host.innerHTML = day ? renderDayDetail(day) : '';
+            host.innerHTML = day ? renderDayDetail(day, false) : '';
         }
 
         function renderControls() {
@@ -3113,16 +3152,19 @@
             const boat = ui.boat === null ? 0 : ui.boat;
 
             try {
-                // One day beyond the range, so a window running past midnight on the
-                // last visible day can still be joined to its tail.
+                // A day either side of the range: the one after so a window running
+                // past midnight on the last visible day can be joined to its tail,
+                // the one before so a window that opened last night and is still
+                // open this morning is known to the first visible row.
                 const days = await computeDayForecast(
-                    ui.today, ui.dayCount + 1, selectedSpanClearance, boat, ui.margin, !!forceRefresh
+                    addDays(ui.today, -1), ui.dayCount + 2,
+                    selectedSpanClearance, boat, ui.margin, !!forceRefresh
                 );
                 if (token !== recomputeToken) return;
 
                 stitchWindowsAcrossMidnight(days);
                 ui.forecastAll = days;
-                ui.forecast = days.slice(0, ui.dayCount);
+                ui.forecast = days.slice(1, 1 + ui.dayCount);
 
                 const inRange = findDay(ui.date);
                 if (inRange) {
@@ -3170,7 +3212,7 @@
                 day.windows = calculateSafeWindows(day.series, selectedSpanClearance, boat, ui.margin);
             }
             stitchWindowsAcrossMidnight(ui.forecastAll);
-            ui.forecast = ui.forecastAll.slice(0, ui.dayCount);
+            ui.forecast = ui.forecastAll.slice(1, 1 + ui.dayCount);
 
             if (selectedOutsideRange && !ui.selectedDay.unavailable) {
                 ui.selectedDay.windows = calculateSafeWindows(
@@ -3408,6 +3450,12 @@
                     const [cy, cm, cd] = check.dataset.check.split('-').map(Number);
                     setDate(new Date(cy, cm - 1, cd));
                     window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+
+                if (e.target.closest('[data-collapse]')) {
+                    ui.expandedDate = null;
+                    renderDays();
                     return;
                 }
 
