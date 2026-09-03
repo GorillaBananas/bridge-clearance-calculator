@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.0** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.1** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.1 | Picked-date panel for dates outside the visible list, midnight-lap fix in the verdict, stale-day guard |
 | v10.0 | Planning-first redesign, multi-day forecast, window-merge fix, midnight stitching, caveats section, wide layout |
 | v9.3 | Bundled tide data (no CORS proxy needed), payload validation, parser fixes, DST fix, unified Rule of Twelfths, CI, GoatCounter |
 | v9.2 | Saved inputs, time shortcuts, collapsible tide chart |
@@ -17,7 +18,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.0</span>
+<span class="version" id="versionTag">v10.1</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -143,6 +144,27 @@ passage running past midnight looks like one closing at midnight plus a short
 "caution throughout" window the next morning. The UI always loads `count + 1` days
 so the last visible day can be stitched too.
 
+### A date outside the visible list (v10.1)
+The day list only ever covers the next 7 or 14 days. A date picked outside it -
+next month, or in the past - has no row to expand, so `renderPickedDay()` renders
+the same detail an expanded row would (windows, curve, the published tide times)
+into `#pickedDay`, directly under the verdict. It shows only when
+`selectedDayLoaded()` returns a day that `findDay()` does not, so an in-range date
+still expands in the list as before.
+
+Such a date is loaded with a day either side of it (`computeDayForecast(date - 1,
+3, ...)`, stitched), for the same reasons the visible range is: the day after so a
+window running past midnight is whole, the day before so one still open that
+morning is known. `contextDays(date)` returns whichever loaded run a date belongs
+to, and `windowContaining()` now falls back to `lapFromPreviousDay()` so a moment
+in the small hours reports the window it is actually inside rather than none.
+
+`selectedDayLoaded()` returns null when the day in hand is for a different date -
+what is left after a fetch for the selected date fails, e.g. a year LINZ has not
+published and no proxy will serve. Before it, `renderResult` interpolated the day
+in hand against the selected moment and printed a confident tide figure for a date
+it had no data for.
+
 ### Multi-Bridge Support (Prepared, not published)
 - `BridgeConfig` object supports multiple bridges
 - Currently only Tamaki Drive is configured
@@ -250,6 +272,19 @@ window opening 00:00 the next morning. The first read as closing at midnight.
 **Solution**: `stitchWindowsAcrossMidnight` joins them, and the closing time
 carries a weekday when it lands on a different day.
 
+### 10. A date outside the list had no windows or tide times (fixed in v10.1)
+
+**Problem**: picking a date beyond the 7/14-day list gave a verdict for the chosen
+minute and nothing else - no windows for that day, no published tide times. The
+detail existed only in the desktop rail card (`renderDayCard`), which is hidden on
+mobile, and even on desktop it lost to any day the user had expanded in the week
+grid. Reproduction: set a boat height, pick a date a month out, look for that day's
+windows. Not safety-relevant in itself - nothing shown was wrong - but it left a
+skipper planning a trip a fortnight out with only the single minute in the picker.
+
+**Solution**: `renderPickedDay()` renders the day detail under the verdict in both
+layouts; `renderDayCard` no longer duplicates it beside the week grid.
+
 ## Remaining known issues
 
 **The page assumes the device is set to New Zealand time.** Tide instants are
@@ -289,6 +324,8 @@ Search by identifier - line numbers move.
 | Recalculate without a fetch | `recalcFromLoaded` |
 | Header figure | `renderHeader` |
 | Verdict panel (incl. shortfall) | `renderResult`, `renderShortfallTail` |
+| Date outside the visible list | `renderPickedDay`, `selectedDayLoaded` |
+| Which loaded run a date is in | `contextDays`, `findDay`, `lapFromPreviousDay` |
 | Day rows | `renderDays`, `renderWindowLine` |
 | Expanded day | `renderDayDetail`, `renderDayCurve` |
 | Published tide points table | `tide-row`, `classifyTidePoints` |
@@ -394,6 +431,11 @@ BridgeConfig.getAvailableBridges()
 - Date and time are native pickers behind the readouts; steppers for margin and
   boat height, 0.05m, repeating on a long press
 - Margin presets include 0, which is valid and shows the bare gap
+
+### Picked-date panel (`id="pickedDay"`)
+- Appears under the result only when the selected date falls outside the 7/14-day
+  list; carries that day's windows, curve and LINZ tide times
+- Hidden the moment the date is back inside the list, where the row expands instead
 
 ### Caveats (`id="caveats"`)
 - The Rule of Twelfths explanation, the OBC cross-check, what the figures do and

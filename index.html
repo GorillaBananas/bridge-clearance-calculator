@@ -451,6 +451,29 @@
 
         .days-more { padding: 16px 14px 6px; font-size: 14px; font-weight: 600; color: var(--link); text-align: left; }
 
+        /* A date outside the visible list has no row to expand, so its windows,
+           its curve and its published tide times are shown in a card under the
+           verdict instead. Without it, picking a date past the fortnight gave a
+           reading for one minute and nothing else - and on mobile, where the
+           desktop day card is hidden, nothing at all. */
+        .picked {
+            margin: 12px 14px 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+        }
+        .picked-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            padding: 14px 18px 0;
+        }
+        .picked-title { font-size: 16px; font-weight: 700; color: var(--navy); }
+        .picked-note { font-size: 12.5px; color: var(--muted); text-align: right; }
+        /* Already the selected date; the button would be a no-op. */
+        .picked .detail-actions { display: none; }
+
         .day-block { display: flex; flex-direction: column; }
 
         /* An open day is lifted clear of the rows either side of it, so the detail
@@ -800,7 +823,7 @@
             }
             .ranges button[aria-pressed="true"] { font-weight: 600; color: var(--navy); }
 
-            .result-wrap, .provenance, .best, .caveats { margin: 0; }
+            .result-wrap, .provenance, .best, .caveats, .picked { margin: 0; }
             .error-panel { margin: 0; }
             .days, .days-head { display: none; }
 
@@ -1058,6 +1081,10 @@
 
         <section class="result-wrap" id="resultWrap" aria-live="polite"></section>
 
+        <!-- The day list only covers the next 7 or 14 days. A date picked beyond
+             it gets its detail here, under the verdict it belongs to. -->
+        <section class="picked hidden" id="pickedDay"></section>
+
         <section class="provenance" id="provenance">
             <div>
                 <div class="who">LINZ tide predictions &middot; Auckland</div>
@@ -1148,7 +1175,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.0</span>
+            <span class="version" id="versionTag">v10.1</span>
         </footer>
 
         </div><!-- /.main -->
@@ -2393,6 +2420,7 @@
             forecast: [],
             forecastAll: [],
             selectedDay: null,
+            selectedDays: [],     // the picked day plus a neighbour either side
             expandedDate: null,
             fetchedAt: null,
             source: null,
@@ -2553,7 +2581,7 @@
         // week grid clips the bar at 24:00 and shows nothing at all on the next
         // row, which reads as though passage closed at midnight.
         function lapFromPreviousDay(date) {
-            const all = ui.forecastAll;
+            const all = contextDays(date);
             const i = all.findIndex(d => dayDelta(d.date, date) === 0);
             if (i <= 0) return null;
 
@@ -2568,15 +2596,41 @@
             return ui.forecast.find(d => dayDelta(d.date, date) === 0) || null;
         }
 
-        function windowContaining(day, when) {
-            if (!day) return null;
-            return day.windows.find(w => when >= w.start.time && when <= w.end.time) || null;
+        // The loaded run of days a date belongs to: the visible range, or the short
+        // run loaded around a date picked outside it. Both carry a day either side
+        // of the one being read, so a window lapping over midnight is findable.
+        function contextDays(date) {
+            return findDay(date) ? ui.forecastAll : ui.selectedDays;
         }
 
-        // The first window starting at or after `when`, searched forward through the
-        // loaded range. Returns null if the range holds none.
+        // The loaded day for the date now selected, or null when the day in hand is
+        // for some other date - which is what is left when a fetch for the selected
+        // date failed. Reading one day's tides for another date's moment would print
+        // a confident figure with nothing behind it, so nothing is printed instead.
+        function selectedDayLoaded() {
+            const day = ui.selectedDay;
+            return day && dayDelta(day.date, ui.date) === 0 ? day : null;
+        }
+
+        function windowContaining(day, when) {
+            if (!day) return null;
+            const own = day.windows.find(w => when >= w.start.time && when <= w.end.time);
+            if (own) return own;
+            // A window is carried on the day it opens, so a moment in the small
+            // hours has to look back a day to find the window it is still inside.
+            const lap = lapFromPreviousDay(day.date);
+            return (lap && when >= lap.start.time && when <= lap.end.time) ? lap : null;
+        }
+
+        // The first window starting at or after `when`. Normally that is searched
+        // through the visible range, but a date picked outside it is not in that
+        // range at all, so for one of those the search runs over the days loaded
+        // around it - otherwise a far-off date always reported no passage.
         function nextWindowAfter(when) {
-            for (const day of ui.forecast) {
+            const days = findDay(when)
+                ? ui.forecast
+                : ui.selectedDays.filter(d => dayDelta(d.date, when) >= 0);
+            for (const day of days) {
                 if (day.unavailable) continue;
                 for (const win of day.windows) {
                     if (win.end.time >= when) return { day, win };
@@ -2611,7 +2665,7 @@
         function renderResult() {
             const wrap = $('resultWrap');
             const when = selectedMoment();
-            const day = ui.selectedDay;
+            const day = selectedDayLoaded();
             const reading = tideAtMoment(day, when);
 
             if (!reading) {
@@ -2740,8 +2794,13 @@
         function renderNextPassage(when) {
             const found = nextWindowAfter(when);
             if (!found) {
-                return '<div class="next-passage"><span class="headline">No passage in the next ' +
-                    ui.dayCount + ' days</span><span class="sub">Try the HIGH span, or a smaller safety margin.</span></div>';
+                // Only the visible range can be spoken for; a picked date outside it
+                // is searched no further than the day after it.
+                const headline = findDay(when)
+                    ? 'No passage in the next ' + ui.dayCount + ' days'
+                    : 'No passage left on ' + fmtDayShort(when);
+                return '<div class="next-passage"><span class="headline">' + escapeHtml(headline) +
+                    '</span><span class="sub">Try the HIGH span, or a smaller safety margin.</span></div>';
             }
             const { day, win } = found;
             const opensAt = win.start.time > when ? win.start.time : when;
@@ -2865,6 +2924,35 @@
                     fmtTimeWithDay(closesAt, win.start.time) + '</span>' +
                 '<span class="win-note">' + note + '</span>' +
             '</span>';
+        }
+
+        // A date picked outside the visible list has no row to expand, so the same
+        // detail an expanded row would show - windows, curve, published tide times -
+        // is rendered here, under the verdict for that date. Before v10.1 this
+        // existed only in the desktop rail card, which is hidden on mobile, so a
+        // date past the range answered for the chosen minute and nothing else.
+        function renderPickedDay() {
+            const host = $('pickedDay');
+            const day = selectedDayLoaded();
+
+            if (!day || findDay(day.date) || required() === null) {
+                host.innerHTML = '';
+                host.classList.add('hidden');
+                return;
+            }
+
+            const delta = dayDelta(day.date, ui.today);
+            const away = delta < 0
+                ? 'Before today'
+                : 'Outside the next ' + ui.dayCount + ' days';
+
+            host.classList.remove('hidden');
+            host.innerHTML =
+                '<div class="picked-head">' +
+                    '<span class="picked-title">' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
+                    '<span class="picked-note">' + away + '</span>' +
+                '</div>' +
+                renderDayDetail(day, false);
         }
 
         // The expanded day: the tide curve with both limits drawn on it, the day's
@@ -3092,9 +3180,14 @@
                     : '') +
                 '<span><span class="dot danger"></span>Danger &mdash; does not fit</span>';
 
+            const picked = ui.forecast.length > 0 && !findDay(ui.date);
             document.querySelectorAll('.ranges button[data-range]').forEach(btn => {
-                if (btn.dataset.range === 'pick') return;
-                const active = (btn.dataset.range === 'fortnight') === (ui.dayCount === FORTNIGHT_DAYS);
+                if (btn.dataset.range === 'pick') {
+                    btn.setAttribute('aria-pressed', String(picked));
+                    return;
+                }
+                const active = !picked &&
+                    (btn.dataset.range === 'fortnight') === (ui.dayCount === FORTNIGHT_DAYS);
                 btn.setAttribute('aria-pressed', String(active));
             });
 
@@ -3220,8 +3313,11 @@
         function renderDayCard() {
             const host = $('dayCard');
             if (required() === null) { host.innerHTML = ''; return; }
+            // A date outside the range now has its own panel under the result, so
+            // the card sticks to days that are in the week grid beside it.
             const key = ui.expandedDate;
-            const day = (key && ui.forecast.find(d => fmtDateValue(d.date) === key)) || ui.selectedDay;
+            const day = (key && ui.forecast.find(d => fmtDateValue(d.date) === key)) ||
+                findDay(ui.date);
             host.innerHTML = day ? renderDayDetail(day, true) : '';
         }
 
@@ -3250,6 +3346,7 @@
             renderControls();
             renderHeader();
             renderResult();
+            renderPickedDay();
             renderProvenance();
             renderDays();
             renderBest();
@@ -3289,13 +3386,18 @@
                 const inRange = findDay(ui.date);
                 if (inRange) {
                     ui.selectedDay = inRange;
+                    ui.selectedDays = ui.forecastAll;
                 } else {
-                    const pair = await computeDayForecast(
-                        ui.date, 2, selectedSpanClearance, boat, ui.margin, false
+                    // The same day either side as the visible range gets, and for the
+                    // same reasons: the day after so a window running past midnight is
+                    // whole, the day before so one still open that morning is known.
+                    const around = await computeDayForecast(
+                        addDays(ui.date, -1), 3, selectedSpanClearance, boat, ui.margin, false
                     );
                     if (token !== recomputeToken) return;
-                    stitchWindowsAcrossMidnight(pair);
-                    ui.selectedDay = pair[0];
+                    stitchWindowsAcrossMidnight(around);
+                    ui.selectedDays = around;
+                    ui.selectedDay = around[1];
                 }
 
                 ui.source = TideDataService.lastDataSource;
@@ -3327,18 +3429,22 @@
             const boat = ui.boat === null ? 0 : ui.boat;
             const selectedOutsideRange = ui.selectedDay && !findDay(ui.selectedDay.date);
 
-            for (const day of ui.forecastAll) {
-                if (day.unavailable) continue;
-                day.windows = calculateSafeWindows(day.series, selectedSpanClearance, boat, ui.margin);
-            }
-            stitchWindowsAcrossMidnight(ui.forecastAll);
+            const redo = days => {
+                for (const day of days) {
+                    if (day.unavailable) continue;
+                    day.windows = calculateSafeWindows(day.series, selectedSpanClearance, boat, ui.margin);
+                }
+                stitchWindowsAcrossMidnight(days);
+            };
+
+            redo(ui.forecastAll);
             ui.forecast = ui.forecastAll.slice(1, 1 + ui.dayCount);
 
-            if (selectedOutsideRange && !ui.selectedDay.unavailable) {
-                ui.selectedDay.windows = calculateSafeWindows(
-                    ui.selectedDay.series, selectedSpanClearance, boat, ui.margin
-                );
-            }
+            // The picked run is its own set of days, so it needs the same pass or the
+            // panel under the result keeps the windows from the previous margin.
+            if (selectedOutsideRange) redo(ui.selectedDays);
+            else ui.selectedDays = ui.forecastAll;
+
             renderAll();
         }
 
