@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.2** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.3** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.3 | Column title stops claiming a date range, day-list heading and separator on both layouts |
 | v10.2 | Verdict and picked day made adjacent, neutral limits panel, "Now" only when now, tide stated on danger verdicts |
 | v10.1 | Picked-date panel for dates outside the visible list, midnight-lap fix in the verdict, stale-day guard |
 | v10.0 | Planning-first redesign, multi-day forecast, window-merge fix, midnight stitching, caveats section, wide layout |
@@ -19,7 +20,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.2</span>
+<span class="version" id="versionTag">v10.3</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -199,6 +200,18 @@ picked day already detailed above it; the same window with its clearances is
 three lines further down. It still renders when the next passage is on another
 day, which is the one thing the picked-day card cannot say.
 
+### Where the date range is stated (v10.3)
+`#mainTitle` is the static text "Passage windows" and no longer carries a range.
+It heads the whole main column - which, on a picked date, includes a day months
+outside that range - so a range there was read as covering the picked date too.
+
+`renderDaysHeading()` puts the range on `#daysHeading`, the heading of the list it
+actually describes: "Next 7 days · 4 – 10 Sep", crossing months as
+"30 Sep – 6 Oct". One heading serves both layouts. `.days-head` used to be hidden
+on wide, which left the week grid with no heading and no boundary above it; it now
+shows on both, with a 2px rule and a real heading weight rather than the uppercase
+micro-label it was.
+
 ### Multi-Bridge Support (Prepared, not published)
 - `BridgeConfig` object supports multiple bridges
 - Currently only Tamaki Drive is configured
@@ -345,6 +358,23 @@ The danger verdict was the one case that never stated the height it was judging,
 which left that figure to the limits line below it and, on the wide layout where
 that line is hidden, to nowhere at all.
 
+### 12. The column title claimed a range it was not showing (fixed in v10.3)
+
+**Problem**: `renderWide` wrote "Passage windows, 4 – 10 Sep" into `#mainTitle`
+from the visible list's range. With a date picked outside that list, the column
+below the title led with a verdict and a full day's detail for, say, 30 September
+- under a title saying 4 – 10 September. Reproduction on a wide viewport: pick a
+date a month out and read the title above the red panel. Not safety-relevant in
+the arithmetic, but it mislabels which date the figures under it belong to.
+
+The same layout had no heading over the week grid and no rule before it, because
+`.days-head` was `display: none` on wide, so a picked date's detail ran straight
+into the seven-day list with nothing marking the change of subject.
+
+**Solution**: the title is static; the range moved to `renderDaysHeading()`, on
+the heading of the list it describes. `.days-head` shows on both layouts, with the
+rule and a heading weight that holds against the cards above it.
+
 ## Remaining known issues
 
 **The page assumes the device is set to New Zealand time.** Tide instants are
@@ -391,6 +421,7 @@ Search by identifier - line numbers move.
 | Day rows | `renderDays`, `renderWindowLine` |
 | Expanded day | `renderDayDetail`, `renderDayCurve` |
 | Published tide points table | `tide-row`, `classifyTidePoints` |
+| Day list heading and range | `renderDaysHeading`, `.days-head`, `.days-title` |
 | Wide layout only | `renderWide`, `renderWeek`, `renderRailLimits`, `renderDayCard` |
 | Caveats section | `id="caveats"` |
 | Analytics | `data-goatcounter` |

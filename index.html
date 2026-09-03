@@ -424,7 +424,19 @@
             border-top: 2px solid var(--border);
             gap: 10px;
         }
-        .days-head .label { font-size: 13px; color: var(--muted-strong); }
+        /* A heading, not a caption: it has to hold its own against the cards
+           above it, or the list reads as more of the same date. */
+        .days-title {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--navy);
+        }
+        .days-range { font-size: 13px; font-weight: 500; color: var(--muted); }
 
         .days { margin: 14px 10px 0; display: flex; flex-direction: column; gap: 4px; }
 
@@ -840,7 +852,17 @@
                the column's rhythm instead of reserving a gap for a hidden line. */
             .result-tail { display: contents; }
             .error-panel { margin: 0; }
-            .days, .days-head { display: none; }
+            .days { display: none; }
+
+            /* The same boundary the narrow layout has. Without it the week grid
+               ran straight on from a picked date's detail with nothing to say the
+               subject had changed - and with no heading at all. */
+            .days-head {
+                margin: 14px 0 0;
+                padding-top: 30px;
+                border-top: 2px solid var(--border);
+            }
+            .days-title { font-size: 20px; }
 
             /* The result becomes a strip: figures on one line, detail beneath. */
             .result { padding: 18px 22px; }
@@ -1116,7 +1138,7 @@
         </section>
 
         <div class="days-head">
-            <span class="label" id="daysHeading">Next 7 days</span>
+            <h2 class="days-title" id="daysHeading">Next 7 days</h2>
         </div>
 
         <section class="days" id="days" aria-labelledby="daysHeading"></section>
@@ -1197,7 +1219,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.2</span>
+            <span class="version" id="versionTag">v10.3</span>
         </footer>
 
         </div><!-- /.main -->
@@ -2900,7 +2922,7 @@
 
         function renderDays() {
             const host = $('days');
-            $('daysHeading').textContent = 'Next ' + ui.dayCount + ' days';
+            renderDaysHeading();
 
             const legend =
                 '<div class="legend">' +
@@ -2956,6 +2978,24 @@
                 : '<button type="button" class="days-more" id="daysMore">Show 7 days only</button>';
 
             host.innerHTML = legend + rows + more;
+        }
+
+        // The range moved here from the column title. The title heads everything
+        // in the column, including a picked date months away, so a range in it was
+        // read as covering that date too; on this heading it labels exactly the
+        // list it sits above.
+        function renderDaysHeading() {
+            const first = ui.forecast[0], last = ui.forecast[ui.forecast.length - 1];
+            let range = '';
+            if (first && last) {
+                const a = first.date, b = last.date;
+                range = a.getMonth() === b.getMonth()
+                    ? a.getDate() + ' – ' + b.getDate() + ' ' + MONTHS[b.getMonth()]
+                    : a.getDate() + ' ' + MONTHS[a.getMonth()] + ' – ' +
+                      b.getDate() + ' ' + MONTHS[b.getMonth()];
+            }
+            $('daysHeading').innerHTML = 'Next ' + ui.dayCount + ' days' +
+                (range ? '<span class="days-range">' + range + '</span>' : '');
         }
 
         function renderWindowLine(day, win) {
@@ -3230,12 +3270,6 @@
         }
 
         function renderWide() {
-            const first = ui.forecast[0], last = ui.forecast[ui.forecast.length - 1];
-            if (first && last) {
-                $('mainTitle').textContent = 'Passage windows, ' +
-                    first.date.getDate() + ' – ' + last.date.getDate() + ' ' + MONTHS[last.date.getMonth()];
-            }
-
             $('legendWide').innerHTML =
                 '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(safeCushion()) +
                     ' m or more of clearance above your boat</span>' +
@@ -3263,6 +3297,7 @@
             $('pillOffline').textContent = TideDataService.getCacheStatus().hasCachedData
                 ? 'Offline copy saved' : 'No offline copy yet';
 
+            renderDaysHeading();
             renderRailLimits();
             renderWeek();
             renderDayCard();
