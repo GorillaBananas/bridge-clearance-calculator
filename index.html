@@ -356,14 +356,22 @@
         .result-detail { font-size: 13px; line-height: 1.5; }
         .result-detail .clause { display: block; }
 
+        /* Deliberately not tinted: this line states the safe *and* the danger
+           threshold, so wearing either colour misreads. It sat on the safe green
+           under danger verdicts, which is the one contradiction a safety page
+           cannot afford. */
         .limits {
             padding: 11px 14px;
             border-radius: 14px;
-            background: var(--safe-softer);
+            background: var(--card);
+            border: 1px solid var(--border);
             font-size: 12.5px;
             line-height: 1.45;
             color: var(--muted-strong);
         }
+
+        .result-tail { margin: 8px 14px 0; display: flex; flex-direction: column; gap: 8px; }
+        .result-tail:empty { display: none; }
 
         .next-passage {
             padding: 14px 16px;
@@ -406,14 +414,17 @@
 
         /* The answer above and the week below are two different questions. Give the
            break room and a rule, rather than letting the list crowd the result. */
+        /* A change of subject, not another card: everything above answers "this
+           date", everything below is the planning list. Against a stack of white
+           cards a hairline did not read as a boundary at all. */
         .days-head {
             display: flex; justify-content: space-between; align-items: center;
-            margin: 34px 18px 0;
-            padding-top: 24px;
-            border-top: 1px solid var(--border);
+            margin: 44px 18px 0;
+            padding-top: 28px;
+            border-top: 2px solid var(--border);
             gap: 10px;
         }
-        .days-head .label { font-size: 13px; }
+        .days-head .label { font-size: 13px; color: var(--muted-strong); }
 
         .days { margin: 14px 10px 0; display: flex; flex-direction: column; gap: 4px; }
 
@@ -824,6 +835,10 @@
             .ranges button[aria-pressed="true"] { font-weight: 600; color: var(--navy); }
 
             .result-wrap, .provenance, .best, .caveats, .picked { margin: 0; }
+            /* The rail states the limits here, so the tail holds only the next
+               passage - and nothing at all most of the time. Collapsing it keeps
+               the column's rhythm instead of reserving a gap for a hidden line. */
+            .result-tail { display: contents; }
             .error-panel { margin: 0; }
             .days, .days-head { display: none; }
 
@@ -1082,8 +1097,15 @@
         <section class="result-wrap" id="resultWrap" aria-live="polite"></section>
 
         <!-- The day list only covers the next 7 or 14 days. A date picked beyond
-             it gets its detail here, under the verdict it belongs to. -->
+             it gets its detail here, directly under the verdict it belongs to:
+             anything between the two breaks the link a reader needs to make. -->
         <section class="picked hidden" id="pickedDay"></section>
+
+        <!-- The verdict's qualifiers - the tide levels this passage turns on, and
+             where the next passage is when there is none now. They follow the day
+             they qualify. With no picked day above, they land under the verdict
+             exactly as before. -->
+        <section class="result-tail" id="resultTail"></section>
 
         <section class="provenance" id="provenance">
             <div>
@@ -1175,7 +1197,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.1</span>
+            <span class="version" id="versionTag">v10.2</span>
         </footer>
 
         </div><!-- /.main -->
@@ -2607,6 +2629,20 @@
         // for some other date - which is what is left when a fetch for the selected
         // date failed. Reading one day's tides for another date's moment would print
         // a confident figure with nothing behind it, so nothing is printed instead.
+        // "Now" is a claim about the present, so it may only be made about the
+        // present. The same figure on any other date or time is the tide at that
+        // moment, and calling it "now" was simply false.
+        function momentIsNow(when) {
+            return Math.abs(when.getTime() - Date.now()) < 60000;
+        }
+
+        // True when the picked-day card is on screen: a date outside the visible
+        // list, with the boat height it needs to be filled in.
+        function pickedDayShown() {
+            const day = selectedDayLoaded();
+            return !!day && !findDay(day.date) && required() !== null;
+        }
+
         function selectedDayLoaded() {
             const day = ui.selectedDay;
             return day && dayDelta(day.date, ui.date) === 0 ? day : null;
@@ -2713,7 +2749,7 @@
 
             let tail;
             if (status === 'danger') {
-                tail = renderShortfallTail(when, limits);
+                tail = renderShortfallTail(reading, limits);
             } else {
                 const closesAt = win ? win.end.time : null;
                 const safeUntil = win && win.safeEnd ? win.safeEnd.time : null;
@@ -2753,23 +2789,44 @@
                             fmtMetres(ui.boat) + ' m + ' + fmtMetres(ui.margin) + ' m margin</span>' +
                         tail +
                     '</span>' +
-                '</div>' +
-                renderLimitsLine(reading, limits) +
+                '</div>';
+        }
+
+        // The tide levels this passage turns on, and where the next passage is when
+        // there is none now. They qualify the verdict, but they are not it: rendered
+        // between the verdict and the picked day's detail they broke the link
+        // between the two, so they follow the day they are about. With no picked
+        // day on screen they land under the verdict exactly as before.
+        function renderResultTail() {
+            const host = $('resultTail');
+            const when = selectedMoment();
+            const reading = tideAtMoment(selectedDayLoaded(), when);
+            const need = required();
+
+            if (!reading || need === null) { host.innerHTML = ''; return; }
+
+            const status = statusFor(selectedSpanClearance - reading.height - need);
+            host.innerHTML = renderLimitsLine(reading, tideLimits(), when) +
                 (status === 'danger' ? renderNextPassage(when) : '');
         }
 
         // The shortfall panel never prints a spare figure: it says how much too tall
-        // the boat is, and what the tide has to do about it.
-        function renderShortfallTail(when, limits) {
+        // the boat is, and what the tide has to do about it. It leads with the tide
+        // itself, as the safe verdict does - before this the danger verdict was the
+        // one case that never stated the height it was judging, which left the
+        // figure to the limits line below and, on the wide layout, nowhere at all.
+        function renderShortfallTail(reading, limits) {
+            const dir = tideDirection(reading);
             const tail = cautionPossible()
                 ? ' m before you fit at all, and to ' + fmtMetres(limits.safe) + ' m for ' +
                   fmtMetres(safeCushion()) + ' m of clearance above your boat.'
                 : ' m before you fit, with your ' + fmtMetres(ui.margin) + ' m margin.';
-            return '<span class="clause">Waiting on the tide: it must fall to ' +
+            return '<span class="clause"><b>Tide ' + fmtMetres(reading.height) + ' m</b>' +
+                (dir ? ' ' + dir : '') + ' · it must fall to ' +
                 fmtMetres(limits.caution) + tail + '</span>';
         }
 
-        function renderLimitsLine(reading, limits) {
+        function renderLimitsLine(reading, limits, when) {
             if (!limits) return '';
             const dir = tideDirection(reading);
             const safeLimit = limits.safe;
@@ -2787,7 +2844,10 @@
                 lead = 'Safe while the tide is under ' + fmtMetres(safeLimit) + ' m, caution up to ' +
                     fmtMetres(limits.caution) + ' m, danger above.';
             }
-            return '<div class="limits">' + lead + ' Now ' + fmtMetres(reading.height) + ' m' +
+            const at = momentIsNow(when)
+                ? ' Now '
+                : ' At ' + fmtTime(when) + ' it is ';
+            return '<div class="limits">' + lead + at + fmtMetres(reading.height) + ' m' +
                 (dir ? ' and ' + dir : '') + '.</div>';
         }
 
@@ -2803,6 +2863,12 @@
                     '</span><span class="sub">Try the HIGH span, or a smaller safety margin.</span></div>';
             }
             const { day, win } = found;
+
+            // The picked-day card sits directly above and lists this window in full,
+            // with its opening, best and closing clearances. Repeating it as a
+            // headline says the same thing twice on one screen.
+            if (pickedDayShown() && dayDelta(day.date, when) === 0) return '';
+
             const opensAt = win.start.time > when ? win.start.time : when;
             const delta = dayDelta(day.date, startOfDay(when));
             const dayWord = delta === 0 ? '' : delta === 1 ? ' tomorrow' : ' on ' + fmtDayShort(day.date);
@@ -2935,7 +3001,7 @@
             const host = $('pickedDay');
             const day = selectedDayLoaded();
 
-            if (!day || findDay(day.date) || required() === null) {
+            if (!pickedDayShown()) {
                 host.innerHTML = '';
                 host.classList.add('hidden');
                 return;
@@ -3347,6 +3413,7 @@
             renderHeader();
             renderResult();
             renderPickedDay();
+            renderResultTail();
             renderProvenance();
             renderDays();
             renderBest();

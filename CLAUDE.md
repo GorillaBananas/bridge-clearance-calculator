@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.1** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.2** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.2 | Verdict and picked day made adjacent, neutral limits panel, "Now" only when now, tide stated on danger verdicts |
 | v10.1 | Picked-date panel for dates outside the visible list, midnight-lap fix in the verdict, stale-day guard |
 | v10.0 | Planning-first redesign, multi-day forecast, window-merge fix, midnight stitching, caveats section, wide layout |
 | v9.3 | Bundled tide data (no CORS proxy needed), payload validation, parser fixes, DST fix, unified Rule of Twelfths, CI, GoatCounter |
@@ -18,7 +19,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.1</span>
+<span class="version" id="versionTag">v10.2</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -177,6 +178,27 @@ published and no proxy will serve. Before it, `renderResult` interpolated the da
 in hand against the selected moment and printed a confident tide figure for a date
 it had no data for.
 
+### Reading order around the verdict (v10.2)
+Three sections answer for the selected date, in this order:
+
+1. `#resultWrap` - the verdict itself, and nothing else
+2. `#pickedDay` - that day's windows, curve and tide times, when the date is
+   outside the visible list (empty and hidden otherwise)
+3. `#resultTail` - `renderLimitsLine` and, on a danger verdict,
+   `renderNextPassage`
+
+The tail is separate from the verdict for one reason: it used to be rendered as
+part of it, which put two panels between the red verdict and the detail that
+explains it. With nothing picked the tail still lands directly under the verdict,
+so the in-range layout is unchanged. On the wide layout `.result-tail` is
+`display: contents` - the rail states the limits there, so the section must not
+reserve a gap for a line that is hidden.
+
+`renderNextPassage` returns nothing when the window it would name falls on the
+picked day already detailed above it; the same window with its clearances is
+three lines further down. It still renders when the next passage is on another
+day, which is the one thing the picked-day card cannot say.
+
 ### Multi-Bridge Support (Prepared, not published)
 - `BridgeConfig` object supports multiple bridges
 - Currently only Tamaki Drive is configured
@@ -297,6 +319,32 @@ skipper planning a trip a fortnight out with only the single minute in the picke
 **Solution**: `renderPickedDay()` renders the day detail under the verdict in both
 layouts; `renderDayCard` no longer duplicates it beside the week grid.
 
+### 11. A green panel under a red verdict, and a false "Now" (fixed in v10.2)
+
+**Problem**: two faults in the same sentence under the verdict.
+
+`.limits` was painted `var(--safe-softer)`, the safe green, whatever the verdict
+said. On a danger verdict the page showed DANGER in red and then a green panel
+directly beneath it. Reproduction: any date and time the boat does not fit.
+Safety-relevant: green means safe everywhere else on the page.
+
+The same line read `Now 3.14 m and falling`, but its figure is
+`tideAtMoment(day, selectedMoment())` - the tide at the *selected* moment. On any
+other date or time the word "Now" was simply false. Reproduction: pick a date
+next month, note the verdict's time, read the sentence below it. Safety-relevant:
+it states a water level for the present that is not the present's.
+
+**Solution**: the panel is neutral (`--card`), since it states the safe *and* the
+danger threshold and wearing either colour misreads it. `momentIsNow()` gates the
+wording, so it reads "Now" only within a minute of the real clock and "At 11:24 it
+is ..." otherwise. `renderRailLimits` was already correct - it reads the real
+clock - and is unchanged.
+
+`renderShortfallTail` now leads with the tide height, as the safe verdict does.
+The danger verdict was the one case that never stated the height it was judging,
+which left that figure to the limits line below it and, on the wide layout where
+that line is hidden, to nowhere at all.
+
 ## Remaining known issues
 
 **The page assumes the device is set to New Zealand time.** Tide instants are
@@ -336,6 +384,8 @@ Search by identifier - line numbers move.
 | Recalculate without a fetch | `recalcFromLoaded` |
 | Header figure | `renderHeader` |
 | Verdict panel (incl. shortfall) | `renderResult`, `renderShortfallTail` |
+| Qualifiers under the verdict | `renderResultTail`, `renderLimitsLine`, `renderNextPassage` |
+| "Now" vs the selected moment | `momentIsNow`, `renderRailLimits` |
 | Date outside the visible list | `renderPickedDay`, `selectedDayLoaded` |
 | Which loaded run a date is in | `contextDays`, `findDay`, `lapFromPreviousDay` |
 | Day rows | `renderDays`, `renderWindowLine` |
@@ -448,9 +498,16 @@ BridgeConfig.getAvailableBridges()
 - Margin presets include 0, which is valid and shows the bare gap
 
 ### Picked-date panel (`id="pickedDay"`)
-- Appears under the result only when the selected date falls outside the 7/14-day
-  list; carries that day's windows, curve and LINZ tide times
+- Appears **directly** under the result when the selected date falls outside the
+  7/14-day list; carries that day's windows, curve and LINZ tide times
+- Nothing may be placed between it and the verdict - see "Reading order around the
+  verdict"
 - Hidden the moment the date is back inside the list, where the row expands instead
+
+### Verdict qualifiers (`id="resultTail"`)
+- The limits sentence, and the next-passage panel on a danger verdict
+- Deliberately untinted: it states the safe and the danger threshold at once
+- On the wide layout the rail carries the limits, so only next passage shows here
 
 ### Caveats (`id="caveats"`)
 - The Rule of Twelfths explanation, the OBC cross-check, what the figures do and
