@@ -76,8 +76,20 @@ poisoned cache self-heals instead of serving junk for 30 days.
 git add tides/ && git commit -m "Add 2029 tide data"
 ```
 The script validates each download contains a full year of real tide rows before
-saving. `.github/workflows/refresh-tides.yml` runs it monthly with `--best-effort`
-and opens a PR; a year LINZ has not published yet is skipped, not fatal.
+saving. `.github/workflows/refresh-tides.yml` runs it monthly with `--best-effort`;
+a year LINZ has not published yet is skipped, not fatal.
+
+When something changed, the workflow pushes a `chore/refresh-tides-<date>` branch
+and **raises an issue** carrying the compare link, rather than opening the pull
+request itself. GitHub blocks Actions from creating pull requests unless
+*Settings > Actions > General > Workflow permissions > Allow GitHub Actions to
+create and approve pull requests* is enabled, and that switch cannot be granted
+from the workflow file - the September 2026 run pushed its branch and then died on
+`gh pr create` for exactly this reason. Raising an issue needs only `issues:
+write`, which the workflow does grant itself. The issue is labelled `tide-data`
+and a later run comments on the open one rather than opening a second, so a year
+of unmerged refreshes is one thread. If the repository setting is ever enabled,
+swapping the issue back for `gh pr create` is a two-line change.
 
 **What auto-extends and what does not**: `availableYears`, the date picker range
 and the DST rules are all computed at runtime, so the *code* needs no change for
@@ -335,7 +347,10 @@ Search by identifier - line numbers move.
 
 ## Data Sources
 
-- **Bundled**: `tides/auckland_{year}.csv` in this repo (currently 2026-2029)
+- **Bundled**: `tides/auckland_{year}.csv` in this repo (currently 2026-2029).
+  The 2026 file was refreshed from LINZ in September 2026; the edition shipped
+  before that was out by up to 0.10 m on 124 of its 1,410 tide points, which is
+  what the monthly workflow exists to catch
 - **LINZ (fallback)**: `https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20{year}.csv`
 - **Year range**: `minYear` (2024) to the current year + 2, computed at runtime.
   The `#tideDate` picker's `min`/`max` are set from the same range.
