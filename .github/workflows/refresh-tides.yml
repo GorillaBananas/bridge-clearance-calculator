@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+  issues: write
 
 jobs:
   refresh:
@@ -22,10 +22,11 @@ jobs:
       - name: Fetch tide tables from LINZ
         id: fetch
         # Best effort: LINZ publishes only a few years ahead, so a year it has
-        # not released yet must not suppress the PR for the years that did update
+        # not released yet must not suppress the report for the years that did
+        # update
         run: ./fetch_tides.sh --best-effort
 
-      - name: Open a pull request if anything changed
+      - name: Push a branch and raise an issue if anything changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -42,8 +43,45 @@ jobs:
           git commit -m "Refresh bundled LINZ tide data"
           git push -u origin "$branch"
 
-          gh pr create \
-            --title "Refresh bundled LINZ tide data" \
-            --body "Automated refresh of the CSVs in \`tides/\`, downloaded from LINZ and validated by \`fetch_tides.sh\`. Merge to publish." \
-            --base main \
-            --head "$branch"
+          # Actions cannot open a pull request unless the repository enables
+          # "Allow GitHub Actions to create and approve pull requests", and that
+          # switch cannot be granted from this file. Raising an issue needs no
+          # such permission, so the branch is pushed either way and the issue
+          # carries the compare link that turns it into a PR in one click.
+          {
+            echo "The scheduled refresh found the bundled LINZ tide data out of date."
+            echo
+            echo "Branch pushed: \`$branch\`"
+            echo
+            echo "Files changed:"
+            git diff --name-only HEAD~1 HEAD -- tides/ | sed 's|^|- `|; s|$|`|'
+            echo
+            echo "**Open it as a pull request:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}?expand=1"
+            echo
+            echo "The CSVs were downloaded from LINZ and validated by \`fetch_tides.sh\`, which"
+            echo "rejects anything that is not a full year of real tide rows. Review the diff"
+            echo "before merging: GitHub Pages ships from \`main\`, so merging publishes it."
+            echo
+            echo "---"
+            echo "_Raised by \`refresh-tides.yml\` ([run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}))._"
+          } > /tmp/issue-body.md
+
+          # A label the run can find its own previous issue by, so a year of
+          # unmerged refreshes is one thread rather than twelve open issues.
+          gh label create tide-data \
+            --color 1D76DB \
+            --description "Bundled LINZ tide data" \
+            --force || true
+
+          existing=$(gh issue list --state open --label tide-data \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            echo "Commenting on existing issue #$existing"
+            gh issue comment "$existing" --body-file /tmp/issue-body.md
+          else
+            gh issue create \
+              --title "Bundled tide data is out of date ($(date +%Y-%m-%d))" \
+              --body-file /tmp/issue-body.md \
+              --label tide-data
+          fi
