@@ -926,6 +926,65 @@ async function main() {
         assert.strictEqual(days[2].windows.length, 1);
     });
 
+    console.log('\nDaylight saving days, and rows that carry five tides');
+
+    // A local day is 23 or 25 hours long twice a year. Building the series from 144
+    // constructed wall-clock slots put the 03:00 hour in twice on the day the clocks
+    // go forward (02:00 does not exist, so new Date(...,2,mm) lands on 03:00) and
+    // never sampled the repeated hour on the day they go back. Fix 14.
+    await test('the 10-minute series covers a short day once, with no repeats', async () => {
+        resetState();
+        serveBundled();
+        const days = await computeDayForecast(new Date(2026, 8, 27), 1, 6.2, 3.5, 0);
+        const s = days[0].series;
+        const instants = s.map(x => x.time.getTime());
+
+        assert.strictEqual(new Set(instants).size, instants.length,
+            'the same instant appears twice in the series');
+        for (let i = 1; i < instants.length; i++) {
+            assert.ok(instants[i] > instants[i - 1], 'the series goes backwards in time');
+            assert.strictEqual(instants[i] - instants[i - 1], 600000,
+                'samples are not ten minutes apart');
+        }
+        assert.strictEqual(s.length, 138, '27 September 2026 is a 23-hour day');
+    });
+
+    await test('the 10-minute series covers a long day in full', async () => {
+        resetState();
+        serveBundled();
+        const days = await computeDayForecast(new Date(2026, 3, 5), 1, 6.2, 3.5, 0);
+        const s = days[0].series;
+        const instants = s.map(x => x.time.getTime());
+
+        assert.strictEqual(new Set(instants).size, instants.length);
+        for (let i = 1; i < instants.length; i++) {
+            assert.strictEqual(instants[i] - instants[i - 1], 600000,
+                'an hour of real time is missing from the series');
+        }
+        assert.strictEqual(s.length, 150, '5 April 2026 is a 25-hour day');
+    });
+
+    // A 25-hour day can hold five tides. The parser read a fixed four, so the last
+    // one was dropped and the evening interpolated between two highs. Fix 15.
+    await test('a row carrying five tides is read in full', () => {
+        const row = '4,Su,4,2027,00:01,1.2,05:24,2.9,11:22,1.1,17:46,2.9,23:47,1.1';
+        const points = parseLinzCsv(row, new Date(2027, 3, 4));
+
+        assert.strictEqual(points.length, 5, 'the fifth tide of a 25-hour day was dropped');
+        assert.strictEqual(points[4].height, 1.1);
+        assert.strictEqual(points[4].time.getHours(), 23);
+        assert.strictEqual(points[4].time.getMinutes(), 47);
+    });
+
+    await test('the dropped tide is the one that hid a real window', async () => {
+        resetState();
+        serveBundled();
+        const days = await computeDayForecast(new Date(2027, 3, 4), 1, 6.2, 3.5, 0);
+        const evening = days[0].windows.filter(w => w.start.time.getHours() >= 18);
+        assert.ok(evening.length >= 1,
+            'the evening passage on 4 April 2027 is missing again');
+    });
+
     console.log('\n' + '='.repeat(60));
     console.log(passed + ' passed, ' + failures.length + ' failed');
     console.log('='.repeat(60) + '\n');

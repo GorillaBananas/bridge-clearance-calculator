@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.5** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.6** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.6 | Series stepped over real time so DST days are sampled once and in full; parser reads a fifth tide |
 | v10.5 | Passages covering whole days stay one window and every day they cover says so |
 | v10.4 | The verdict's date carries the same weight as its time on the wide layout |
 | v10.3 | Column title stops claiming a date range, day-list heading and separator on both layouts |
@@ -22,7 +23,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.5</span>
+<span class="version" id="versionTag">v10.6</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -436,7 +437,64 @@ Two tests in `node_extract_tests.js` pin it: a four-day fixture must come back
 `1,0,0,0` windows with the passage ending on the day it truly closes, and an
 unavailable day must break the chain rather than be joined across.
 
+### 14. Daylight-saving days were sampled twice, or not at all (fixed in v10.6)
+
+**Problem**: `generateHourlyTideData` built its series from 144 constructed
+wall-clock slots, `new Date(y, m, d, hour, minute)` for hour 0-23. A local day is
+not always 24 hours.
+
+On the day the clocks go **forward** the 02:00 hour does not exist, so those six
+slots silently resolved to 03:00-03:50 - putting that hour in the series twice, out
+of order. `calculateSafeWindows` then reported a second window inside the first:
+on 27 September 2026 with a 5.00 m boat the list showed `00:10 - 03:10` followed by
+`03:00 - 03:10`. Reproduction: any boat that stops fitting during the 03:00 hour on
+a spring-forward day. Not safety-relevant - the duplicate lies inside a real window
+- but plainly wrong.
+
+On the day they go **back** the repeated 02:00-02:59 hour was never sampled, so 70
+minutes of real time went unexamined. A closure falling entirely inside that hour
+would have been invisible, which is the same failure as issue 8 and is the
+dangerous direction. It has not bitten: the tide runs monotonically through that
+hour on all four bundled fall-back days, so nothing hides there yet. That is the
+tide's phase, not the code's doing.
+
+**Solution**: step **real time** from one local midnight to the next -
+`new Date(y, m, d)` to `new Date(y, m, d + 1)`, in 10-minute increments. A day
+comes out 138, 144 or 150 samples long as it should. `renderDayCurve` and
+`renderWeek` divided by a hardcoded 86400000 to place a time on the day; both now
+use the real day length.
+
+### 15. A fifth tide in a row was dropped (fixed in v10.6)
+
+**Problem**: `parseLinzCsv` read a fixed four time/height pairs per row. A 25-hour
+day can hold five, and one does in the bundled data:
+
+```
+4,Su,4,2027,00:01,1.2,05:24,2.9,11:22,1.1,17:46,2.9,23:47,1.1
+```
+
+The 23:47 low was dropped, so the evening interpolated from the 17:46 high straight
+to the next morning's high: the water was held near 2.9 m all evening when it
+actually fell to 1.1 m. **A real 4h50m passage window, 19:00 to 23:50, did not
+appear at all.** Reproduction: 4 April 2027, any boat needing 3.5 m or so.
+
+Safety-relevant. Here a *low* was dropped, so the app over-stated the water and
+hid a window - the conservative direction. Drop a *high* instead, which the same
+bug would do on a five-tide day that opens and closes with a high, and the app
+would under-state the water and show passage under a bridge that was too low.
+
+**Solution**: iterate every pair the row carries rather than the first four.
+
 ## Remaining known issues
+
+**Times in the repeated hour of a fall-back day are ambiguous.** When the clocks go
+back, wall-clock 02:00-02:59 happens twice, and the page shows plain local times.
+On 5 April 2026 a 5.00 m boat sees a window written `02:50 - 03:40`; both times are
+correct, but the reader cannot tell which 02:50 is meant, and the window really
+runs 1h50m rather than the 50m the two times imply. The underlying instants are
+right - only the label is ambiguous. Fixing it means printing NZDT/NZST on that one
+day a year.
+
 
 **The page assumes the device is set to New Zealand time.** Tide instants are
 built from NZ wall-clock plus the NZ offset, but `generateHourlyTideData` builds
@@ -497,8 +555,11 @@ Search by identifier - line numbers move.
 - **LINZ (fallback)**: `https://static.charts.linz.govt.nz/tide-tables/maj-ports/csv/Auckland%20{year}.csv`
 - **Year range**: `minYear` (2024) to the current year + 2, computed at runtime.
   The `#tideDate` picker's `min`/`max` are set from the same range.
-- **Format**: CSV with day, weekday, month, year, and up to 4 time/height pairs per
-  row. No header in the LINZ files, but header lines are tolerated.
+- **Format**: CSV with day, weekday, month, year, and time/height pairs per row.
+  Usually four, three on some days - and **five** on the 25-hour day the clocks go
+  back, which `4,Su,4,2027,...` is in the bundled data. Read every pair the row
+  carries; a fixed four drops a real tide (issue 15). No header in the LINZ files,
+  but header lines are tolerated.
 
 ## Testing
 
@@ -535,6 +596,13 @@ minutes at a window edge until it interpolated over *real* elapsed time rather t
 the wall-clock difference. That is the issue 3 fix, confirmed from outside the app
 for the first time. If you touch `ruleOfTwelfthsHeight`, `generateHourlyTideData`
 or `calculateSafeWindows`, rebuild that check rather than trusting the suites.
+
+The v10.6 audit went further: the real UI was driven across 12 boat heights, 4
+margins, both spans and 6 simulated dates - 576 states, 4,032 rendered day rows -
+and every window **as displayed** was compared against the independent
+implementation. That is what found issues 14 and 15; neither was visible to the
+suites, because they share the app's own sampling. Keep that in mind before
+trusting a green run.
 
 `node_extract_tests.js` pulls the shipped functions and `TideDataService` out of
 `index.html` by brace matching and runs them against `tides/auckland_2026.csv`

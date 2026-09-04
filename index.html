@@ -1229,7 +1229,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.5</span>
+            <span class="version" id="versionTag">v10.6</span>
         </footer>
 
         </div><!-- /.main -->
@@ -1967,11 +1967,15 @@
 
                 if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
 
-                for (let j = 0; j < 4; j++) {
-                    const timeIdx = 4 + j * 2;
-                    const heightIdx = 5 + j * 2;
-
-                    if (timeIdx >= parts.length || heightIdx >= parts.length) break;
+                // LINZ publishes four tides on most days and three on some, but a
+                // 25-hour day - the one the clocks go back on - can hold five, and
+                // 4 April 2027 does. A fixed four dropped that row's last tide, a
+                // low at 23:47, which left the evening interpolating from the 17:46
+                // high straight to the next morning's high: the water was held near
+                // 2.9 m all evening when it actually fell to 1.1 m, and a real
+                // 4h50m passage window disappeared. Read every pair the row carries.
+                for (let timeIdx = 4; timeIdx + 1 < parts.length; timeIdx += 2) {
+                    const heightIdx = timeIdx + 1;
 
                     const timeStr = parts[timeIdx].trim();
                     const heightStr = parts[heightIdx].trim();
@@ -2081,24 +2085,31 @@
             const month = date.getMonth();
             const day = date.getDate();
 
-            // Generate data points every 10 minutes instead of every hour
-            for (let hour = 0; hour < 24; hour++) {
-                for (let minute = 0; minute < 60; minute += 10) {
-                    const currentTime = new Date(year, month, day, hour, minute, 0);
+            // Ten minutes of real time apart, from this local midnight to the next,
+            // rather than 144 constructed wall-clock slots. On the day the clocks go
+            // forward the 02:00 hour does not exist and new Date(y, m, d, 2, mm)
+            // silently lands on 03:00, which put that hour in the series twice and
+            // made calculateSafeWindows report a second window inside the first. On
+            // the day they go back the repeated hour was never sampled at all,
+            // leaving 70 minutes of real time unexamined. A local day is 23, 24 or
+            // 25 hours long and the series now matches whichever it is.
+            const start = new Date(year, month, day).getTime();
+            const end = new Date(year, month, day + 1).getTime();
 
-                    const bracket = findBracketingPoints(tidePoints, currentTime);
+            for (let t = start; t < end; t += 10 * 60000) {
+                const currentTime = new Date(t);
+                const bracket = findBracketingPoints(tidePoints, currentTime);
 
-                    if (!bracket) {
-                        const nearest = tidePoints.reduce((prev, curr) =>
-                            Math.abs(curr.time - currentTime) < Math.abs(prev.time - currentTime) ? curr : prev
-                        );
-                        intervalData.push({ time: currentTime, height: nearest.height });
-                    } else {
-                        intervalData.push({
-                            time: currentTime,
-                            height: ruleOfTwelfthsHeight(bracket.before, bracket.after, currentTime)
-                        });
-                    }
+                if (!bracket) {
+                    const nearest = tidePoints.reduce((prev, curr) =>
+                        Math.abs(curr.time - currentTime) < Math.abs(prev.time - currentTime) ? curr : prev
+                    );
+                    intervalData.push({ time: currentTime, height: nearest.height });
+                } else {
+                    intervalData.push({
+                        time: currentTime,
+                        height: ruleOfTwelfthsHeight(bracket.before, bracket.after, currentTime)
+                    });
                 }
             }
 
@@ -3253,8 +3264,10 @@
             const pad = Math.max(0.15, (hi - lo) * 0.12);
             lo -= pad; hi += pad;
 
+            // Not 24 hours: a local day is 23 or 25 hours long twice a year.
             const dayStart = startOfDay(day.date).getTime();
-            const x = t => ((t - dayStart) / 86400000) * W;
+            const dayLength = startOfDay(addDays(day.date, 1)).getTime() - dayStart;
+            const x = t => ((t - dayStart) / dayLength) * W;
             const y = h => H - ((h - lo) / (hi - lo)) * H;
 
             const band = (from, to, fill) => {
@@ -3437,7 +3450,8 @@
                 const isToday = dayDelta(day.date, ui.today) === 0;
                 const key = fmtDateValue(day.date);
                 const dayStart = startOfDay(day.date).getTime();
-                const pct = t => Math.max(0, Math.min(100, ((t - dayStart) / 86400000) * 100));
+                const dayLength = startOfDay(addDays(day.date, 1)).getTime() - dayStart;
+                const pct = t => Math.max(0, Math.min(100, ((t - dayStart) / dayLength) * 100));
 
                 // A window drawn on this row, clipped to the day at both ends. `lap`
                 // marks the tail of one that opened yesterday.
