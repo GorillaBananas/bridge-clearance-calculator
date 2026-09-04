@@ -80,6 +80,8 @@ const FUNCTIONS = [
     'getYearCsv',
     'getDayPoints',
     'computeDayForecast',
+    'endsAtDayEnd',
+    'startsAtDayStart',
     'stitchWindowsAcrossMidnight'
 ];
 
@@ -851,6 +853,77 @@ async function main() {
         assert.strictEqual(days[0].windows.length, 1);
         assert.strictEqual(days[1].windows.length, 1);
         assert.strictEqual(days[0].windows[0].end.time.getDate(), 6);
+    });
+
+    // A short boat fits at every tide for days on end, so a passage can cover whole
+    // calendar days. Joining day N to day N+1 empties N+1 when that was its only
+    // window; pairwise stitching then had nothing to chain from and stopped, cutting
+    // one passage into pieces that each falsely closed at midnight - and leaving the
+    // emptied days reading as "No passage this day". Fix 13.
+    await test('a passage covering whole days stays one window', () => {
+        // Four days: the first opens at noon, the middle two are open end to end,
+        // the last closes at 18:00.
+        const run = (y, mo, d, hStart, hEnd) => {
+            const pts = [];
+            for (let h = hStart; h <= hEnd; h++) {
+                for (const m of (h === hEnd ? [50] : [0, 50])) {
+                    pts.push({ time: new Date(y, mo, d, h, m), tideHeight: 0.5,
+                               actualClearance: 5.7, spareClearance: 1.3 });
+                }
+            }
+            return {
+                start: pts[0], end: pts[pts.length - 1], best: pts[0],
+                minClearance: 1.3, maxClearance: 1.3,
+                safeStart: pts[0], safeEnd: pts[pts.length - 1], hasSafeCore: true
+            };
+        };
+        const days = [
+            { date: new Date(2026, 8, 6), unavailable: false, windows: [run(2026, 8, 6, 12, 23)] },
+            { date: new Date(2026, 8, 7), unavailable: false, windows: [run(2026, 8, 7, 0, 23)] },
+            { date: new Date(2026, 8, 8), unavailable: false, windows: [run(2026, 8, 8, 0, 23)] },
+            { date: new Date(2026, 8, 9), unavailable: false, windows: [run(2026, 8, 9, 0, 18)] }
+        ];
+
+        stitchWindowsAcrossMidnight(days);
+
+        assert.strictEqual(days[0].windows.length, 1, 'the passage should be carried on the day it opens');
+        assert.strictEqual(days[1].windows.length, 0, 'a day wholly inside the passage carries no window of its own');
+        assert.strictEqual(days[2].windows.length, 0, 'the chain must not stop at the first emptied day');
+        assert.strictEqual(days[3].windows.length, 0, 'the closing day should have been joined too');
+
+        const win = days[0].windows[0];
+        assert.strictEqual(win.start.time.getDate(), 6);
+        assert.strictEqual(win.start.time.getHours(), 12);
+        assert.strictEqual(win.end.time.getDate(), 9, 'the window must run to the day it actually closes');
+        assert.strictEqual(win.end.time.getHours(), 18);
+        assert.strictEqual(win.hasSafeCore, true);
+        assert.ok(win.safeEnd.time.getTime() === win.end.time.getTime(),
+            'the safe core should have been carried to the end of the joined window');
+    });
+
+    await test('an unavailable day breaks the chain rather than joining across it', () => {
+        const run = (y, mo, d, hStart, hEnd) => {
+            const pts = [
+                { time: new Date(y, mo, d, hStart, 0), tideHeight: 0.5, actualClearance: 5.7, spareClearance: 1.3 },
+                { time: new Date(y, mo, d, hEnd, 50), tideHeight: 0.5, actualClearance: 5.7, spareClearance: 1.3 }
+            ];
+            return {
+                start: pts[0], end: pts[1], best: pts[0],
+                minClearance: 1.3, maxClearance: 1.3,
+                safeStart: pts[0], safeEnd: pts[1], hasSafeCore: true
+            };
+        };
+        const days = [
+            { date: new Date(2026, 8, 6), unavailable: false, windows: [run(2026, 8, 6, 12, 23)] },
+            { date: new Date(2026, 8, 7), unavailable: true, windows: [] },
+            { date: new Date(2026, 8, 8), unavailable: false, windows: [run(2026, 8, 8, 0, 23)] }
+        ];
+
+        stitchWindowsAcrossMidnight(days);
+
+        assert.strictEqual(days[0].windows[0].end.time.getDate(), 6,
+            'a day with no published predictions is not evidence the passage continued');
+        assert.strictEqual(days[2].windows.length, 1);
     });
 
     console.log('\n' + '='.repeat(60));
