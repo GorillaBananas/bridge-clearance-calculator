@@ -890,8 +890,18 @@
                 margin-left: auto;
             }
             .result.danger .result-strip-pill { background: rgba(255,255,255,0.20); }
+            /* The date is the identity of the answer, not a caption on it: with a
+               date picked, the first thing to check is that the verdict is for the
+               day you asked about. At 14px regular beside a 38px figure it was
+               read past. Date and time now carry the same weight. */
             .result-figure.when .value { font-size: 22px; font-weight: 700; }
-            .result-figure.when .caption { font-size: 14px; letter-spacing: 0; text-transform: none; font-weight: 400; order: 1; }
+            .result-figure.when .caption {
+                font-size: 17px;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                text-transform: none;
+                order: 1;
+            }
             .result-divide { align-self: stretch; min-height: 56px; }
             .result-strip-pill { margin-left: auto; }
             .result-detail { display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; }
@@ -1219,7 +1229,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.3</span>
+            <span class="version" id="versionTag">v10.5</span>
         </footer>
 
         </div><!-- /.main -->
@@ -2284,32 +2294,50 @@
         // closes at midnight when it does not, and would show the tail as a short
         // "caution throughout" window of its own. Join them into the single window
         // they are, carried on the day it opens.
+        function endsAtDayEnd(win) {
+            return win.end.time.getHours() === 23 && win.end.time.getMinutes() === 50;
+        }
+
+        function startsAtDayStart(win) {
+            return win.start.time.getHours() === 0 && win.start.time.getMinutes() === 0;
+        }
+
+        // Joining day N's trailing window to day N+1's leading one empties day N+1
+        // when that was its only window - which is exactly what happens when a
+        // passage covers a whole day. Pairwise iteration then found nothing to
+        // chain from on the next step and gave up, so a passage spanning three or
+        // more days came back cut into pieces, each falsely closing at midnight.
+        // Carrying the open window across the days it swallows fixes that: the
+        // passage stays one window however many days it runs for.
         function stitchWindowsAcrossMidnight(days) {
-            for (let i = 0; i < days.length - 1; i++) {
-                const day = days[i], next = days[i + 1];
-                if (day.unavailable || next.unavailable) continue;
+            let open = null;   // still running when the previous day ended
+
+            for (const day of days) {
+                if (day.unavailable) { open = null; continue; }
+
+                const first = day.windows[0];
+                let carried = null;
+
+                if (open && first && startsAtDayStart(first)) {
+                    open.end = first.end;
+                    open.minClearance = Math.min(open.minClearance, first.minClearance);
+                    if (first.maxClearance > open.maxClearance) {
+                        open.maxClearance = first.maxClearance;
+                        open.best = first.best;
+                    }
+                    if (first.safeStart) {
+                        if (!open.safeStart) open.safeStart = first.safeStart;
+                        open.safeEnd = first.safeEnd;
+                    }
+                    open.hasSafeCore = (open.safeStart !== null);
+
+                    day.windows.shift();
+                    carried = open;
+                }
 
                 const last = day.windows[day.windows.length - 1];
-                const first = next.windows[0];
-                if (!last || !first) continue;
-
-                const endsAtMidnight = last.end.time.getHours() === 23 && last.end.time.getMinutes() === 50;
-                const startsAtMidnight = first.start.time.getHours() === 0 && first.start.time.getMinutes() === 0;
-                if (!endsAtMidnight || !startsAtMidnight) continue;
-
-                last.end = first.end;
-                last.minClearance = Math.min(last.minClearance, first.minClearance);
-                if (first.maxClearance > last.maxClearance) {
-                    last.maxClearance = first.maxClearance;
-                    last.best = first.best;
-                }
-                if (first.safeStart) {
-                    if (!last.safeStart) last.safeStart = first.safeStart;
-                    last.safeEnd = first.safeEnd;
-                }
-                last.hasSafeCore = (last.safeStart !== null);
-
-                next.windows.shift();
+                if (last) open = endsAtDayEnd(last) ? last : null;
+                else open = (carried && endsAtDayEnd(carried)) ? carried : null;
             }
             return days;
         }
@@ -2498,10 +2526,23 @@
 
         // A time, with the weekday attached when it falls on a different day from
         // the moment it is being read against - a window closing at 00:30 must not
-        // look like one closing earlier the same evening.
-        function fmtTimeWithDay(when, reference) {
+        // look like one closing earlier the same evening. Beyond six days the
+        // weekday comes round again, so the date is added too: a passage running
+        // from Thursday to Thursday must not read as ending the day it began.
+        function fmtTimeWithDay(when, reference, withDate) {
             const t = fmtTime(when);
-            return dayDelta(when, reference) === 0 ? t : t + ' ' + WEEKDAYS[when.getDay()];
+            const delta = dayDelta(when, reference);
+            if (delta === 0 && !withDate) return t;
+            const day = WEEKDAYS[when.getDay()];
+            return (withDate || Math.abs(delta) > 6)
+                ? t + ' ' + day + ' ' + when.getDate() + ' ' + MONTHS[when.getMonth()]
+                : t + ' ' + day;
+        }
+
+        // A window running more than a week has the same weekday at both ends, so
+        // its times are dated whatever day they are read against.
+        function spansPastAWeek(win) {
+            return dayDelta(win.end.time, win.start.time) > 6;
         }
 
         function fmtDateValue(date) {
@@ -2612,28 +2653,46 @@
             return (win.end.time - win.start.time) / 60000;
         }
 
+        // Everything covering any part of this day, a passage that opened on an
+        // earlier day included. A window is carried on the day it opens, so listing
+        // only those left a day sitting wholly inside a long passage with nothing to
+        // show - it read as closed when it was open end to end - and cost the last
+        // day of such a passage the hours it was open before its own window. One
+        // that runs in from an earlier day is drawn as a continuation rather than as
+        // something opening today, which is how the week grid has always drawn it.
         function windowsToShow(day) {
-            return (!day || day.unavailable) ? [] : day.windows;
+            if (!day || day.unavailable) return [];
+            const lap = lapCovering(day.date);
+            return lap ? [lap].concat(day.windows) : day.windows;
+        }
+
+        // True when this window opened before the day it is being shown on.
+        function isLapOn(win, date) {
+            return win.start.time < startOfDay(date);
         }
 
         function windowStatus(win) {
             return win.hasSafeCore ? 'safe' : 'caution';
         }
 
-        // A window is carried on the day it opens, so a day that is still under an
-        // open window at midnight has to look back to find it. Without this the
-        // week grid clips the bar at 24:00 and shows nothing at all on the next
-        // row, which reads as though passage closed at midnight.
-        function lapFromPreviousDay(date) {
+        // The window that opened earlier and is still open during this day. A
+        // passage can cover whole days, and a day it covers carries no window of
+        // its own, so the search walks back past those empty days to the day the
+        // passage opened on - looking only at yesterday found nothing for the
+        // middle of a three-day passage.
+        function lapCovering(date) {
             const all = contextDays(date);
             const i = all.findIndex(d => dayDelta(d.date, date) === 0);
             if (i <= 0) return null;
 
-            const prev = all[i - 1];
-            if (prev.unavailable || prev.windows.length === 0) return null;
-
-            const last = prev.windows[prev.windows.length - 1];
-            return dayDelta(last.end.time, date) === 0 ? last : null;
+            for (let j = i - 1; j >= 0; j--) {
+                const prev = all[j];
+                if (prev.unavailable) return null;
+                const last = prev.windows[prev.windows.length - 1];
+                if (!last) continue;
+                return dayDelta(last.end.time, date) >= 0 ? last : null;
+            }
+            return null;
         }
 
         function findDay(date) {
@@ -2676,7 +2735,7 @@
             if (own) return own;
             // A window is carried on the day it opens, so a moment in the small
             // hours has to look back a day to find the window it is still inside.
-            const lap = lapFromPreviousDay(day.date);
+            const lap = lapCovering(day.date);
             return (lap && when >= lap.start.time && when <= lap.end.time) ? lap : null;
         }
 
@@ -2690,7 +2749,9 @@
                 : ui.selectedDays.filter(d => dayDelta(d.date, when) >= 0);
             for (const day of days) {
                 if (day.unavailable) continue;
-                for (const win of day.windows) {
+                // windowsToShow, not day.windows: a passage that opened on an
+                // earlier day and is still running is the next one to report.
+                for (const win of windowsToShow(day)) {
                     if (win.end.time >= when) return { day, win };
                 }
             }
@@ -3004,30 +3065,54 @@
             const closesAt = win.end.time;
             const isNow = now >= win.start.time && now <= closesAt;
 
+            // Times are read against the row they are printed on, so a moment on
+            // any other day carries its weekday. For a window opening on this day
+            // that is what it always was; for one running in from an earlier day it
+            // is what stops "00:00" reading as the moment passage opened.
+            const lap = isLapOn(win, day.date);
+            const dated = spansPastAWeek(win);
+            const at = t => fmtTimeWithDay(t, day.date, dated);
+            const coversWholeDay = lap && dayDelta(closesAt, day.date) > 0;
+
             // With no caution shoulders the safe range is the window, so repeating the
             // same two times says nothing; the duration is worth more.
             const fullySafe = win.hasSafeCore &&
                 win.safeStart.time.getTime() === win.start.time.getTime() &&
                 win.safeEnd.time.getTime() === win.end.time.getTime();
 
+            // A passage that opened earlier has no opening time on this day, and
+            // printing the one it inherits invites the reader to take it for today's.
+            // What matters is that it is already open, and when it ends.
+            if (lap) {
+                return '<span class="win">' +
+                    '<span class="dot ' + status + '"></span>' +
+                    '<span class="win-times num">' +
+                        (coversWholeDay ? 'Open all day' : '&rarr; ' + fmtTime(closesAt)) +
+                    '</span>' +
+                    '<span class="win-note">' +
+                        (coversWholeDay ? 'closes ' + at(closesAt)
+                                        : 'open since ' + at(win.start.time)) +
+                    '</span>' +
+                '</span>';
+            }
+
             let note;
             if (!win.hasSafeCore) {
                 note = 'caution throughout';
             } else if (isNow) {
                 note = fullySafe
-                    ? 'now · open to ' + fmtTimeWithDay(win.end.time, win.start.time)
-                    : 'now · safe to ' + fmtTimeWithDay(win.safeEnd.time, win.start.time);
+                    ? 'now · open to ' + at(win.end.time)
+                    : 'now · safe to ' + at(win.safeEnd.time);
             } else if (fullySafe) {
                 note = fmtDuration(windowMinutes(win) * 60000);
             } else {
-                note = 'safe ' + fmtTime(win.safeStart.time) + '–' +
-                    fmtTimeWithDay(win.safeEnd.time, win.start.time);
+                note = 'safe ' + at(win.safeStart.time) + '–' + at(win.safeEnd.time);
             }
 
             return '<span class="win">' +
                 '<span class="dot ' + status + '"></span>' +
-                '<span class="win-times num">' + fmtTime(win.start.time) + ' – ' +
-                    fmtTimeWithDay(closesAt, win.start.time) + '</span>' +
+                '<span class="win-times num">' + at(win.start.time) + ' – ' +
+                    at(closesAt) + '</span>' +
                 '<span class="win-note">' + note + '</span>' +
             '</span>';
         }
@@ -3105,9 +3190,14 @@
 
         function renderDetailWindow(day, win) {
             const closesAt = win.end.time;
+            // Same rule as the summary rows: a moment on another day carries its
+            // weekday, so a passage running in from an earlier day cannot be read
+            // as opening on this one.
+            const dated = spansPastAWeek(win);
+            const at = t => fmtTimeWithDay(t, day.date, dated);
             const moment = (label, point, isPeak) =>
                 '<div class="moment' + (isPeak ? ' peak' : '') + '">' +
-                    '<span class="when">' + label + ' ' + fmtTime(point.time) + '</span>' +
+                    '<span class="when">' + label + ' ' + at(point.time) + '</span>' +
                     '<span class="gap num">' + fmtMetres(point.actualClearance) +
                         ' m<span class="qual"> gap</span></span>' +
                     '<span class="spare num">' + fmtMetres(point.spareClearance) + ' m spare</span>' +
@@ -3122,15 +3212,14 @@
                   ' m of clearance above your boat.'
                 : fullySafe
                     ? 'Safe throughout, on your ' + fmtMetres(ui.margin) + ' m margin.'
-                    : 'Safe ' + fmtTime(win.safeStart.time) + ' – ' +
-                      fmtTimeWithDay(win.safeEnd.time, win.start.time) +
+                    : 'Safe ' + at(win.safeStart.time) + ' – ' + at(win.safeEnd.time) +
                       ' · caution either side of that';
 
             return '<div class="detail-window">' +
                 '<div class="detail-window-head">' +
                     '<span class="dot ' + windowStatus(win) + '"></span>' +
-                    '<span class="times num">' + fmtTime(win.start.time) + ' – ' +
-                        fmtTimeWithDay(closesAt, win.start.time) + '</span>' +
+                    '<span class="times num">' + at(win.start.time) + ' – ' +
+                        at(closesAt) + '</span>' +
                     '<span class="dur">' + fmtDuration(windowMinutes(win) * 60000) + '</span>' +
                 '</div>' +
                 '<div class="moments">' +
@@ -3177,7 +3266,7 @@
             };
 
             let bands = '';
-            for (const win of day.windows) {
+            for (const win of windowsToShow(day)) {
                 const closes = new Date(win.end.time.getTime() + 10 * 60000);
                 bands += band(win.start.time, closes, 'var(--curve-caution)');
                 if (win.safeStart) {
@@ -3382,17 +3471,15 @@
                     return out;
                 };
 
-                const lapWin = day.unavailable ? null : lapFromPreviousDay(day.date);
-                const own = day.unavailable ? [] : windowsToShow(day);
+                const shown = day.unavailable ? [] : windowsToShow(day);
 
                 let bands = '';
                 if (day.unavailable) {
                     bands = '<span class="week-empty">No published predictions</span>';
-                } else if (own.length === 0 && !lapWin) {
+                } else if (shown.length === 0) {
                     bands = '<span class="week-empty">No passage this day</span>';
                 } else {
-                    if (lapWin) bands += drawWindow(lapWin, true);
-                    for (const win of own) bands += drawWindow(win, false);
+                    for (const win of shown) bands += drawWindow(win, isLapOn(win, day.date));
                 }
 
                 if (isToday) {

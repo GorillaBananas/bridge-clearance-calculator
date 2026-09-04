@@ -4,11 +4,13 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.3** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.5** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.5 | Passages covering whole days stay one window and every day they cover says so |
+| v10.4 | The verdict's date carries the same weight as its time on the wide layout |
 | v10.3 | Column title stops claiming a date range, day-list heading and separator on both layouts |
 | v10.2 | Verdict and picked day made adjacent, neutral limits panel, "Now" only when now, tide stated on danger verdicts |
 | v10.1 | Picked-date panel for dates outside the visible list, midnight-lap fix in the verdict, stale-day guard |
@@ -20,7 +22,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.3</span>
+<span class="version" id="versionTag">v10.5</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -158,6 +160,13 @@ passage running past midnight looks like one closing at midnight plus a short
 "caution throughout" window the next morning. The UI always loads `count + 1` days
 so the last visible day can be stitched too.
 
+It carries the open window forward rather than comparing adjacent days, because
+joining day N to day N+1 **empties** N+1 when that was its only window - which is
+what a passage covering a whole day looks like. Pairwise iteration then had no
+trailing window to chain from and stopped (issue 13). `endsAtDayEnd` and
+`startsAtDayStart` are extracted by `node_extract_tests.js` alongside it, so they
+must stay named top-level functions.
+
 ### A date outside the visible list (v10.1)
 The day list only ever covers the next 7 or 14 days. A date picked outside it -
 next month, or in the past - has no row to expand, so `renderPickedDay()` renders
@@ -170,7 +179,7 @@ Such a date is loaded with a day either side of it (`computeDayForecast(date - 1
 3, ...)`, stitched), for the same reasons the visible range is: the day after so a
 window running past midnight is whole, the day before so one still open that
 morning is known. `contextDays(date)` returns whichever loaded run a date belongs
-to, and `windowContaining()` now falls back to `lapFromPreviousDay()` so a moment
+to, and `windowContaining()` now falls back to `lapCovering()` so a moment
 in the small hours reports the window it is actually inside rather than none.
 
 `selectedDayLoaded()` returns null when the day in hand is for a different date -
@@ -178,6 +187,23 @@ what is left after a fetch for the selected date fails, e.g. a year LINZ has not
 published and no proxy will serve. Before it, `renderResult` interpolated the day
 in hand against the selected moment and printed a confident tide figure for a date
 it had no data for.
+
+### A day inside a passage (v10.5)
+A short boat fits at every tide for days on end, so a passage can run for a week.
+A window is carried on the day it opens, so the days it covers hold none of their
+own. `lapCovering(date)` finds the window covering a day, walking back past the
+empty days to the one the passage opened on; `windowsToShow(day)` returns it ahead
+of the day's own windows, and every render site - rows, expanded detail, the tide
+curve, the week grid, `windowContaining`, `nextWindowAfter` - goes through one of
+those two rather than reading `day.windows` directly. Reading `day.windows` in a
+render site is the bug: it is only what *opens* that day.
+
+`isLapOn(win, date)` marks a window that opened earlier. Such a window is drawn as
+a continuation, never as something opening today: "Open all day · closes ..." when
+it covers the day end to end, otherwise "&rarr; 05:40 · open since 18:50 Wed". Times
+are read against the row they sit on, and `spansPastAWeek()` dates them when a
+window runs more than six days - "00:00 Thu - 18:00 Thu" is a week apart and reads
+as a single day.
 
 ### Reading order around the verdict (v10.2)
 Three sections answer for the selected date, in this order:
@@ -375,6 +401,31 @@ into the seven-day list with nothing marking the change of subject.
 the heading of the list it describes. `.days-head` shows on both layouts, with the
 rule and a heading weight that holds against the cards above it.
 
+### 13. Days inside a long passage read as closed (fixed in v10.5)
+
+**Problem**: with a short boat the tide blocks passage rarely, so a window can run
+for days. `stitchWindowsAcrossMidnight` joined day N's trailing window to day N+1's
+leading one and shifted it off N+1 - emptying that day when it was its only window.
+The pairwise loop then found no trailing window on N+1 and stopped, so one passage
+came back cut into pieces, each falsely closing at midnight, with the days between
+holding nothing. Every render site read `day.windows`, so those days printed
+**"No passage this day"** while passage was in fact open around the clock.
+
+Reproduction: boat 2.70 m, margin 0.30, the seven-day list. Before the fix, four of
+seven days claimed no passage and the others showed 47h 50m windows starting at
+00:00; the true state was one continuous passage across the whole week.
+
+Safety-relevant in the direction of saying closed when open - it does not put a
+boat under the bridge unsafely, but it hides passage a skipper is entitled to see,
+and the false midnight closes are the failure issue 9 was meant to end.
+
+**Solution**: the stitcher carries the open window across the days it swallows, so
+a passage stays one window however long it runs. `lapCovering` and `windowsToShow`
+give every render site the window covering a day, not only the ones opening on it.
+Two tests in `node_extract_tests.js` pin it: a four-day fixture must come back
+`1,0,0,0` windows with the passage ending on the day it truly closes, and an
+unavailable day must break the chain rather than be joined across.
+
 ## Remaining known issues
 
 **The page assumes the device is set to New Zealand time.** Tide instants are
@@ -417,7 +468,8 @@ Search by identifier - line numbers move.
 | Qualifiers under the verdict | `renderResultTail`, `renderLimitsLine`, `renderNextPassage` |
 | "Now" vs the selected moment | `momentIsNow`, `renderRailLimits` |
 | Date outside the visible list | `renderPickedDay`, `selectedDayLoaded` |
-| Which loaded run a date is in | `contextDays`, `findDay`, `lapFromPreviousDay` |
+| Which loaded run a date is in | `contextDays`, `findDay` |
+| A day covered by an earlier passage | `lapCovering`, `windowsToShow`, `isLapOn` |
 | Day rows | `renderDays`, `renderWindowLine` |
 | Expanded day | `renderDayDetail`, `renderDayCurve` |
 | Published tide points table | `tide-row`, `classifyTidePoints` |
@@ -534,6 +586,13 @@ BridgeConfig.getAvailableBridges()
 - Nothing may be placed between it and the verdict - see "Reading order around the
   verdict"
 - Hidden the moment the date is back inside the list, where the row expands instead
+
+### The verdict's date (`.result-figure.when`, `.result-when`)
+- The date is the identity of the answer, not a caption on it: with a date picked,
+  the first check a reader makes is that the verdict is for the day they asked for
+- On the wide layout the strip shows time over date, both bold - the date was
+  14px regular beside a 38px figure and was read past (v10.4). The narrow layout
+  states both in one bold line and needs nothing extra
 
 ### Verdict qualifiers (`id="resultTail"`)
 - The limits sentence, and the next-passage panel on a danger verdict
