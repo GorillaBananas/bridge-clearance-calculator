@@ -890,8 +890,18 @@
                 margin-left: auto;
             }
             .result.danger .result-strip-pill { background: rgba(255,255,255,0.20); }
+            /* The date is the identity of the answer, not a caption on it: with a
+               date picked, the first thing to check is that the verdict is for the
+               day you asked about. At 14px regular beside a 38px figure it was
+               read past. Date and time now carry the same weight. */
             .result-figure.when .value { font-size: 22px; font-weight: 700; }
-            .result-figure.when .caption { font-size: 14px; letter-spacing: 0; text-transform: none; font-weight: 400; order: 1; }
+            .result-figure.when .caption {
+                font-size: 17px;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                text-transform: none;
+                order: 1;
+            }
             .result-divide { align-self: stretch; min-height: 56px; }
             .result-strip-pill { margin-left: auto; }
             .result-detail { display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; }
@@ -1219,7 +1229,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.3</span>
+            <span class="version" id="versionTag">v10.4</span>
         </footer>
 
         </div><!-- /.main -->

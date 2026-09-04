@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.3** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.4** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.4 | The verdict's date carries the same weight as its time on the wide layout |
 | v10.3 | Column title stops claiming a date range, day-list heading and separator on both layouts |
 | v10.2 | Verdict and picked day made adjacent, neutral limits panel, "Now" only when now, tide stated on danger verdicts |
 | v10.1 | Picked-date panel for dates outside the visible list, midnight-lap fix in the verdict, stale-day guard |
@@ -20,7 +21,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.3</span>
+<span class="version" id="versionTag">v10.4</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -534,6 +535,13 @@ BridgeConfig.getAvailableBridges()
 - Nothing may be placed between it and the verdict - see "Reading order around the
   verdict"
 - Hidden the moment the date is back inside the list, where the row expands instead
+
+### The verdict's date (`.result-figure.when`, `.result-when`)
+- The date is the identity of the answer, not a caption on it: with a date picked,
+  the first check a reader makes is that the verdict is for the day they asked for
+- On the wide layout the strip shows time over date, both bold - the date was
+  14px regular beside a 38px figure and was read past (v10.4). The narrow layout
+  states both in one bold line and needs nothing extra
 
 ### Verdict qualifiers (`id="resultTail"`)
 - The limits sentence, and the next-passage panel on a danger verdict
