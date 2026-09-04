@@ -411,9 +411,19 @@ came back cut into pieces, each falsely closing at midnight, with the days betwe
 holding nothing. Every render site read `day.windows`, so those days printed
 **"No passage this day"** while passage was in fact open around the clock.
 
-Reproduction: boat 2.70 m, margin 0.30, the seven-day list. Before the fix, four of
-seven days claimed no passage and the others showed 47h 50m windows starting at
-00:00; the true state was one continuous passage across the whole week.
+Reproduction, as reported: **boat 3.20 m, margin 0** over 4-10 September 2026. The
+tide clears 3.20 m except around the higher springs, so Saturday and Monday were
+open end to end and both printed "No passage this day", while Friday's window
+showed a false close at 23:50 Saturday. A second reproduction at boat 2.70 m,
+margin 0.30 is starker: four of seven days claimed no passage and the rest showed
+47h 50m windows starting at 00:00, when the true state was one passage running the
+whole week.
+
+What decides whether this bug appears is the **clearance the boat needs**, not the
+boat height alone: passage closes whenever the tide exceeds `6.2 - (boat + margin)`,
+so at 3.20 m needed the cut-off is a 3.00 m tide and whole days clear it, while at
+3.50 m needed the cut-off is 2.70 m and every high tide in that week blocks. When
+reproducing, work from the required clearance.
 
 Safety-relevant in the direction of saying closed when open - it does not put a
 boat under the bridge unsafely, but it hides passage a skipper is entitled to see,
@@ -513,6 +523,18 @@ conservative cent; the test asserts it never shows more clearance than the chart
 Beware `obc_verification_tests.py`: despite the name, its "OBC reference values"
 are re-derived from the same subtraction the app performs, so its 0.00% error
 figure is circular. It tests arithmetic, not agreement with OBC.
+
+**On checking the window maths without circularity.** The suites above all share
+the app's own interpolation, so agreement between them proves less than it looks.
+The way to check it properly is a second implementation written from the stated
+method - own CSV parser, own Rule of Twelfths, own window derivation, no code in
+common - compared against `computeDayForecast` over a sweep of required clearances
+and start dates. Done for v10.5 over 350 day-forecasts: exact agreement, except on
+the two days a year the clocks change, where the naive version was out by 10-20
+minutes at a window edge until it interpolated over *real* elapsed time rather than
+the wall-clock difference. That is the issue 3 fix, confirmed from outside the app
+for the first time. If you touch `ruleOfTwelfthsHeight`, `generateHourlyTideData`
+or `calculateSafeWindows`, rebuild that check rather than trusting the suites.
 
 `node_extract_tests.js` pulls the shipped functions and `TideDataService` out of
 `index.html` by brace matching and runs them against `tides/auckland_2026.csv`
