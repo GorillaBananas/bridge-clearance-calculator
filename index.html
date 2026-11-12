@@ -450,7 +450,7 @@
 
         .day {
             display: flex;
-            gap: 12px;
+            gap: 8px;
             padding: 10px 14px;
             border-radius: 16px;
             background: transparent;
@@ -459,7 +459,9 @@
             text-align: left;
         }
         .day.today { background: var(--card); border-color: var(--border); }
-        .day-name { width: 48px; flex: 0 0 auto; padding-top: 3px; font-size: 14px; font-weight: 700; color: var(--muted-strong); }
+        /* 52 + 8 is the old 48 + 12: "Wed 18" no longer wraps, and the windows
+           keep the width that lets a 360px phone fit each on one line. */
+        .day-name { width: 52px; flex: 0 0 auto; padding-top: 3px; white-space: nowrap; font-size: 14px; font-weight: 700; color: var(--muted-strong); }
         .day.today .day-name { color: var(--navy); }
 
         /* Open, the row is the panel's heading rather than a 48px day stub. */
@@ -498,6 +500,20 @@
         .picked .detail-actions { display: none; }
 
         .day-block { display: flex; flex-direction: column; }
+
+        /* A day with two windows ran into the next with nothing between them. A
+           hairline marks where one day ends; next to a card (today, or an open
+           day) the card's own edge already does, so the line is dropped there. */
+        .day-block + .day-block::before {
+            content: '';
+            height: 1px;
+            margin: 0 14px 4px;
+            background: var(--border);
+        }
+        .day-block.today::before,
+        .day-block.today + .day-block::before,
+        .day-block.open::before,
+        .day-block.open + .day-block::before { display: none; }
 
         /* An open day is lifted clear of the rows either side of it, so the detail
            reads as belonging to that day rather than running into its neighbours. */
@@ -1229,7 +1245,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.6</span>
+            <span class="version" id="versionTag">v10.7</span>
         </footer>
 
         </div><!-- /.main -->
@@ -3036,7 +3052,8 @@
                       '<span class="close">Tap to close &#8963;</span>'
                     : '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' + body;
 
-                return '<div class="day-block' + (isOpen ? ' open' : '') + '">' +
+                return '<div class="day-block' + (isOpen ? ' open' : '') +
+                    (isToday && !isOpen ? ' today' : '') + '">' +
                     '<button type="button" class="day' + (isToday && !isOpen ? ' today' : '') +
                         '" data-date="' + key + '" aria-expanded="' + isOpen + '">' +
                         head +

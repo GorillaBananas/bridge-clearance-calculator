@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.6** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.7** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.7 | Hairlines between days in the mobile list; weekday no longer wraps |
 | v10.6 | Series stepped over real time so DST days are sampled once and in full; parser reads a fifth tide |
 | v10.5 | Passages covering whole days stay one window and every day they cover says so |
 | v10.4 | The verdict's date carries the same weight as its time on the wide layout |
@@ -23,7 +24,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.6</span>
+<span class="version" id="versionTag">v10.7</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -226,6 +227,17 @@ reserve a gap for a line that is hidden.
 picked day already detailed above it; the same window with its clearances is
 three lines further down. It still renders when the next passage is on another
 day, which is the one thing the picked-day card cannot say.
+
+### Separating the days (v10.7)
+The mobile list's rows have no background, so a day with two or three windows
+ran into the next. `.day-block + .day-block::before` draws a hairline between
+days. It is dropped beside the today card and an open day (`.day-block.today`,
+`.day-block.open`), whose own edge already marks the boundary.
+
+`.day-name` is 52px with `nowrap` and the row gap 8px: the old 48px wrapped
+"Mon 16" and "Wed 18" onto two lines. Keep the sum at 60px - widening the
+column without taking it from the gap pushes every "safe ..." note onto a second
+line on a 360px phone.
 
 ### Where the date range is stated (v10.3)
 `#mainTitle` is the static text "Passage windows" and no longer carries a range.
