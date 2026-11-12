@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.7** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.8** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.8 | Day rows: chevron, "+1" for the next morning, dots on caution only |
 | v10.7 | Hairlines between days in the mobile list; weekday no longer wraps |
 | v10.6 | Series stepped over real time so DST days are sampled once and in full; parser reads a fifth tide |
 | v10.5 | Passages covering whole days stay one window and every day they cover says so |
@@ -24,7 +25,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.7</span>
+<span class="version" id="versionTag">v10.8</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -238,6 +239,27 @@ days. It is dropped beside the today card and an open day (`.day-block.today`,
 "Mon 16" and "Wed 18" onto two lines. Keep the sum at 60px - widening the
 column without taking it from the gap pushes every "safe ..." note onto a second
 line on a 360px phone.
+
+### Day rows (v10.8)
+Every change here was made against the same constraint: on a 360px phone each
+window and its note must stay on one line. Check that width after touching
+`renderWindowLine` or the `.day` padding.
+
+- **Chevron** (`.chev`) says a row opens. It is absolutely placed in the row's
+  right padding (`padding-right: 22px`), so it costs the times nothing. The
+  12px that paid for it came from `.days` margin, 10px to 4px a side, which also
+  lines the day names up with the heading.
+- **"+1"** marks a time on the next morning (`.next-day`, with `.sr-only` text
+  for screen readers). The weekday it replaces wrapped most evening windows.
+  Only a delta of exactly one day gets it; further times keep their weekday, as
+  do windows dated by `spansPastAWeek`. The expanded day and the wide week grid
+  are unchanged.
+- **Dots mark caution only.** Most windows are safe, so a green dot on each
+  drowned the amber ones. The dot gutter is rendered only when some visible
+  window is caution (`marked` in `renderDays`), so the common case gets the width
+  back while a mixed list stays aligned. The list never shows a time the boat
+  does not fit, so its legend no longer keys danger. "caution throughout" is now
+  "caution only", and a safe core of one sample reads "safe only at 19:50".
 
 ### Where the date range is stated (v10.3)
 `#mainTitle` is the static text "Passage windows" and no longer carries a range.

@@ -438,7 +438,7 @@
         }
         .days-range { font-size: 13px; font-weight: 500; color: var(--muted); }
 
-        .days { margin: 14px 10px 0; display: flex; flex-direction: column; gap: 4px; }
+        .days { margin: 14px 4px 0; display: flex; flex-direction: column; gap: 4px; }
 
         .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 14px 10px; font-size: 12px; color: var(--muted); }
         .legend span { display: flex; align-items: center; gap: 6px; }
@@ -451,7 +451,8 @@
         .day {
             display: flex;
             gap: 8px;
-            padding: 10px 14px;
+            position: relative;
+            padding: 10px 22px 10px 14px;
             border-radius: 16px;
             background: transparent;
             border: 1px solid transparent;
@@ -473,6 +474,33 @@
         .win-times { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
         .win-note { font-size: 12.5px; color: var(--muted); }
         .day-empty { font-size: 13px; color: var(--muted); padding-top: 2px; }
+
+        /* Nothing said a row opens. The chevron does, without a label. */
+        /* In the row's right padding, so it takes no width from the times. */
+        .chev {
+            position: absolute;
+            top: 12px;
+            right: 8px;
+            font-size: 22px;
+            line-height: 20px;
+            color: var(--muted);
+        }
+
+        .next-day {
+            font-size: 0.6em;
+            font-weight: 700;
+            vertical-align: super;
+            line-height: 0;
+            margin-left: 1px;
+            color: var(--muted);
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px; height: 1px;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            white-space: nowrap;
+        }
 
         .days-more { padding: 16px 14px 6px; font-size: 14px; font-weight: 600; color: var(--link); text-align: left; }
 
@@ -1245,7 +1273,7 @@
         <footer class="site-footer">
             <a href="https://www.obc.co.nz/media/63141/outboard_boating_club_bridge_gap_calculation_chart.pdf" target="_blank" rel="noopener">OBC gap table</a>
             <a href="https://www.google.com/maps?q=-36.85288211260062,174.80456444825913" target="_blank" rel="noopener">Bridge location</a>
-            <span class="version" id="versionTag">v10.7</span>
+            <span class="version" id="versionTag">v10.8</span>
         </footer>
 
         </div><!-- /.main -->
@@ -3012,14 +3040,16 @@
             const host = $('days');
             renderDaysHeading();
 
+            // Most windows are safe, so a green dot on each said little and drowned
+            // out the amber one. Only caution is marked; the list never shows a
+            // time the boat does not fit, so danger needs no key here.
+            const cushion = fmtMetres(safeCushion());
             const legend =
                 '<div class="legend">' +
-                    '<span><span class="dot safe"></span>Safe &mdash; ' + fmtMetres(safeCushion()) +
-                        ' m clear of your boat</span>' +
                     (cautionPossible()
-                        ? '<span><span class="dot caution"></span>Caution &mdash; fits, less clear</span>'
-                        : '') +
-                    '<span><span class="dot danger"></span>Danger &mdash; does not fit</span>' +
+                        ? '<span>Times show when your boat fits; &lsquo;safe&rsquo; is ' + cushion + ' m clear</span>' +
+                          '<span><span class="dot caution"></span>Caution &mdash; fits, but never ' + cushion + ' m clear</span>'
+                        : '<span>Every window leaves at least ' + cushion + ' m clear of your boat</span>') +
                 '</div>';
 
             if (required() === null) {
@@ -3027,6 +3057,11 @@
                     '<div class="day"><div class="day-empty">Enter your boat height above to see passage windows.</div></div>';
                 return;
             }
+
+            // A gutter for the caution dot only when something in the list is
+            // marked, so the times keep its width the rest of the time.
+            const marked = ui.forecast.some(day => !day.unavailable &&
+                windowsToShow(day).some(win => windowStatus(win) === 'caution'));
 
             const rows = ui.forecast.map(day => {
                 const key = fmtDateValue(day.date);
@@ -3040,7 +3075,7 @@
                 } else if (shown.length === 0) {
                     body = '<div class="day-empty">No passage this day</div>';
                 } else {
-                    body = '<div class="day-windows">' + shown.map(win => renderWindowLine(day, win)).join('') + '</div>';
+                    body = '<div class="day-windows">' + shown.map(win => renderWindowLine(day, win, marked)).join('') + '</div>';
                 }
 
                 // Open, the row becomes the panel's heading: the summary lines it
@@ -3050,7 +3085,8 @@
                 const head = isOpen
                     ? '<span class="day-name open">' + escapeHtml(fmtDayShort(day.date)) + '</span>' +
                       '<span class="close">Tap to close &#8963;</span>'
-                    : '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' + body;
+                    : '<span class="day-name">' + escapeHtml(fmtDayTiny(day.date)) + '</span>' + body +
+                      '<span class="chev" aria-hidden="true">&rsaquo;</span>';
 
                 return '<div class="day-block' + (isOpen ? ' open' : '') +
                     (isToday && !isOpen ? ' today' : '') + '">' +
@@ -3087,7 +3123,7 @@
                 (range ? '<span class="days-range">' + range + '</span>' : '');
         }
 
-        function renderWindowLine(day, win) {
+        function renderWindowLine(day, win, marked) {
             const now = new Date();
             const status = windowStatus(win);
             const closesAt = win.end.time;
@@ -3099,8 +3135,17 @@
             // is what stops "00:00" reading as the moment passage opened.
             const lap = isLapOn(win, day.date);
             const dated = spansPastAWeek(win);
-            const at = t => fmtTimeWithDay(t, day.date, dated);
+            // The next morning is "+1", flight-style: a weekday after the closing
+            // time pushed the note onto a second line on most evening windows.
+            // Anything further away keeps its weekday.
+            const at = t => (!dated && dayDelta(t, day.date) === 1)
+                ? fmtTime(t) + '<span class="next-day"><span aria-hidden="true">+1</span>' +
+                  '<span class="sr-only"> next day</span></span>'
+                : fmtTimeWithDay(t, day.date, dated);
             const coversWholeDay = lap && dayDelta(closesAt, day.date) > 0;
+            const dot = marked
+                ? '<span class="dot' + (status === 'caution' ? ' caution' : '') + '"></span>'
+                : '';
 
             // With no caution shoulders the safe range is the window, so repeating the
             // same two times says nothing; the duration is worth more.
@@ -3113,7 +3158,7 @@
             // What matters is that it is already open, and when it ends.
             if (lap) {
                 return '<span class="win">' +
-                    '<span class="dot ' + status + '"></span>' +
+                    dot +
                     '<span class="win-times num">' +
                         (coversWholeDay ? 'Open all day' : '&rarr; ' + fmtTime(closesAt)) +
                     '</span>' +
@@ -3126,19 +3171,21 @@
 
             let note;
             if (!win.hasSafeCore) {
-                note = 'caution throughout';
+                note = 'caution only';
             } else if (isNow) {
                 note = fullySafe
                     ? 'now · open to ' + at(win.end.time)
                     : 'now · safe to ' + at(win.safeEnd.time);
             } else if (fullySafe) {
                 note = fmtDuration(windowMinutes(win) * 60000);
+            } else if (win.safeStart.time.getTime() === win.safeEnd.time.getTime()) {
+                note = 'safe only at ' + at(win.safeStart.time);
             } else {
                 note = 'safe ' + at(win.safeStart.time) + '–' + at(win.safeEnd.time);
             }
 
             return '<span class="win">' +
-                '<span class="dot ' + status + '"></span>' +
+                dot +
                 '<span class="win-times num">' + at(win.start.time) + ' – ' +
                     at(closesAt) + '</span>' +
                 '<span class="win-note">' + note + '</span>' +
