@@ -4,11 +4,14 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.6** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.9** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.9 | Caution key only when a caution window is listed; closed windows on today's row fade |
+| v10.8 | Day rows: chevron, "+1" for the next morning, dots on caution only |
+| v10.7 | Hairlines between days in the mobile list; weekday no longer wraps |
 | v10.6 | Series stepped over real time so DST days are sampled once and in full; parser reads a fifth tide |
 | v10.5 | Passages covering whole days stay one window and every day they cover says so |
 | v10.4 | The verdict's date carries the same weight as its time on the wide layout |
@@ -23,7 +26,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.6</span>
+<span class="version" id="versionTag">v10.9</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -226,6 +229,44 @@ reserve a gap for a line that is hidden.
 picked day already detailed above it; the same window with its clearances is
 three lines further down. It still renders when the next passage is on another
 day, which is the one thing the picked-day card cannot say.
+
+### Separating the days (v10.7)
+The mobile list's rows have no background, so a day with two or three windows
+ran into the next. `.day-block + .day-block::before` draws a hairline between
+days. It is dropped beside the today card and an open day (`.day-block.today`,
+`.day-block.open`), whose own edge already marks the boundary.
+
+`.day-name` is 52px with `nowrap` and the row gap 8px: the old 48px wrapped
+"Mon 16" and "Wed 18" onto two lines. Keep the sum at 60px - widening the
+column without taking it from the gap pushes every "safe ..." note onto a second
+line on a 360px phone.
+
+### Day rows (v10.8)
+Every change here was made against the same constraint: on a 360px phone each
+window and its note must stay on one line. Check that width after touching
+`renderWindowLine` or the `.day` padding.
+
+- **Chevron** (`.chev`) says a row opens. It is absolutely placed in the row's
+  right padding (`padding-right: 22px`), so it costs the times nothing. The
+  12px that paid for it came from `.days` margin, 10px to 4px a side, which also
+  lines the day names up with the heading.
+- **"+1"** marks a time on the next morning (`.next-day`, with `.sr-only` text
+  for screen readers). The weekday it replaces wrapped most evening windows.
+  Only a delta of exactly one day gets it; further times keep their weekday, as
+  do windows dated by `spansPastAWeek`. The expanded day and the wide week grid
+  are unchanged.
+- **Dots mark caution only.** Most windows are safe, so a green dot on each
+  drowned the amber ones. The dot gutter is rendered only when some visible
+  window is caution (`marked` in `renderDays`), so the common case gets the width
+  back while a mixed list stays aligned. The list never shows a time the boat
+  does not fit, so its legend no longer keys danger. "caution throughout" is now
+  "caution only", and a safe core of one sample reads "safe only at 19:50".
+- **The caution key follows the dots** (v10.9). It shows only when the list holds
+  a caution window - the same `marked` that decides the gutter. A key for a mark
+  the page is not showing explained nothing.
+- **Closed windows fade** (v10.9). A window whose last passable moment is past
+  gets `.win.past` (opacity 0.4) and "Closed:" for screen readers, so today's row
+  leads with what is still ahead. Only today's row can hold one.
 
 ### Where the date range is stated (v10.3)
 `#mainTitle` is the static text "Passage windows" and no longer carries a range.
