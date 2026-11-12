@@ -4,11 +4,12 @@
 Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web application that calculates safe passage times under bridges based on tide data and boat height.
 
 ## Current Version
-**v10.8** - Displayed in the page footer (search `versionTag` in index.html)
+**v10.9** - Displayed in the page footer (search `versionTag` in index.html)
 
 ### Version History
 | Version | Changes |
 |---------|---------|
+| v10.9 | Caution key only when a caution window is listed; closed windows on today's row fade |
 | v10.8 | Day rows: chevron, "+1" for the next morning, dots on caution only |
 | v10.7 | Hairlines between days in the mobile list; weekday no longer wraps |
 | v10.6 | Series stepped over real time so DST days are sampled once and in full; parser reads a fifth tide |
@@ -25,7 +26,7 @@ Bridge Clearance Calculator for Auckland's Tamaki Drive - a single-page web appl
 
 **Important**: When making significant changes, update the version in the footer:
 ```html
-<span class="version" id="versionTag">v10.8</span>
+<span class="version" id="versionTag">v10.9</span>
 ```
 The floating `validation-badge` is gone; the version now sits in the footer next
 to the OBC and map links.
@@ -260,6 +261,12 @@ window and its note must stay on one line. Check that width after touching
   back while a mixed list stays aligned. The list never shows a time the boat
   does not fit, so its legend no longer keys danger. "caution throughout" is now
   "caution only", and a safe core of one sample reads "safe only at 19:50".
+- **The caution key follows the dots** (v10.9). It shows only when the list holds
+  a caution window - the same `marked` that decides the gutter. A key for a mark
+  the page is not showing explained nothing.
+- **Closed windows fade** (v10.9). A window whose last passable moment is past
+  gets `.win.past` (opacity 0.4) and "Closed:" for screen readers, so today's row
+  leads with what is still ahead. Only today's row can hold one.
 
 ### Where the date range is stated (v10.3)
 `#mainTitle` is the static text "Passage windows" and no longer carries a range.
